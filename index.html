@@ -650,6 +650,7 @@ let S = {
 let _jPhotos = [];
 let _polished = null;
 let _currentTab = 'home';
+let _anthropicKey = null; // loaded from Supabase config at startup
 
 // ══════════════════════════════════════════
 // STORAGE
@@ -671,6 +672,18 @@ async function saveState() {
   }
 }
 async function loadState() {
+  // Fetch Anthropic key from Supabase config table
+  if (window.__supabaseReady && roadTripDb) {
+    try {
+      const { data: cfgData } = await roadTripDb
+        .from('config')
+        .select('value')
+        .eq('key', 'anthropic_key')
+        .single();
+      if (cfgData?.value) _anthropicKey = cfgData.value;
+    } catch(e) { console.warn('Could not load API key from config:', e.message); }
+  }
+
   if (window.__remoteState) { S = { ...S, ...window.__remoteState }; setSyncStatus('synced'); return; }
   if (window.__supabaseReady && roadTripDb) {
     try {
@@ -1112,8 +1125,9 @@ Respond ONLY with a JSON object, no markdown, no explanation. Format:
   "tip": "1 practical insider tip for families",
   "maps": "best Google Maps search string to find this exact location"
 }`;
+    if(!_anthropicKey)throw new Error('API key not loaded');
     const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':_anthropicKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})
     });
     const d=await res.json();
@@ -1466,8 +1480,9 @@ ${kid2?`Kid 2's highlight: "${kid2}"`:''}
 Location: ${stop.name} (${stop.park})
 
 Write a warm, vivid, 2-3 paragraph journal entry in first-person plural (we/our — the parents writing together). Keep it personal, specific, heartfelt. Capture emotions, sights, and family moments. 3-4 sentences per paragraph. Avoid clichés like "magical" or "breathtaking". Make it feel like a real family memory. Do not add headers or labels.`;
+    if(!_anthropicKey)throw new Error('API key not loaded');
     const res=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':_anthropicKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,messages:[{role:'user',content:prompt}]})
     });
     const d=await res.json();

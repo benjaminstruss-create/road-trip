@@ -13,20 +13,25 @@
   const supabaseUrl = 'https://ppnsknbcavcaswelhfac.supabase.co';
   const supabaseKey = 'sb_publishable_GMRYvSKaYhpNFoDhS4YANw_t3vE27Qe';
   
-  // FIXED: Renamed to tripDb to stop the "already declared" error
-  let tripDb;
-  try {
-    tripDb = supabase.createClient(supabaseUrl, supabaseKey);
-  } catch (e) {
-    console.error("Connection failed:", e);
-  }
+  // FIXED: Renamed to 'roadTripDb' to ensure it NEVER clashes with the library
+  let roadTripDb;
+  
+  // We wrap this in a function to ensure the library is loaded first
+  window.onload = () => {
+    try {
+      roadTripDb = supabase.createClient(supabaseUrl, supabaseKey);
+      console.log("Supabase connection initialized!");
+    } catch (e) {
+      console.error("Initialization failed:", e);
+    }
+  };
 
   // ── DATABASE SYNC ────────────────────────────────────────────────────────
   async function saveState() {
     localStorage.setItem('tripS', JSON.stringify(S));
-    if (!tripDb) return;
+    if (!roadTripDb) return;
 
-    const { error } = await tripDb
+    const { error } = await roadTripDb
       .from('trip_data')
       .upsert({ id: 1, category: 'full_state', content: S });
 
@@ -35,9 +40,12 @@
   }
 
   async function loadState() {
-    if (!tripDb) return;
+    if (!roadTripDb) {
+        console.log("Database not ready yet, retrying...");
+        return;
+    }
 
-    const { data, error } = await tripDb
+    const { data, error } = await roadTripDb
       .from('trip_data')
       .select('content')
       .eq('id', 1)
@@ -46,62 +54,27 @@
     if (data && data.content) {
       S = { ...S, ...data.content };
       setSyncStatus('synced');
-      if (typeof renderTab === 'function') renderTab(_currentTab);
-    } else if (localStorage.getItem('tripS')) {
-      S = JSON.parse(localStorage.getItem('tripS'));
-      setSyncStatus('local only');
     }
-  }
-
-  // ── PHOTO STORAGE ────────────────────────────────────────────────────────
-  async function uploadPhotoToSupabase(fileData, fileName) {
-    if (!tripDb) return null;
-    const base64Data = fileData.split(',')[1];
-    const byteCharacters = atob(base64Data);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-    }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], {type: 'image/jpeg'});
-
-    const filePath = `public/${Date.now()}-${fileName}.jpg`;
-
-    const { data, error } = await tripDb.storage
-      .from('trip-photos')
-      .upload(filePath, blob);
-
-    if (error) return null;
-
-    const { data: urlData } = tripDb.storage.from('trip-photos').getPublicUrl(filePath);
-    return urlData.publicUrl;
   }
 </script>
 
 <style>
-:root {
-  --pine: #0f1f0f; --mist: #b0ceba; --sage: #6a9e7a; --cream: #f4efe6; --amber: #c07828;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'DM Sans', sans-serif; background: var(--cream); overflow-x: hidden; }
-#pinScreen { position: fixed; inset: 0; z-index: 999; background: var(--pine); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; }
-.pinTitle { font-family: 'Playfair Display', serif; color: var(--mist); font-size: 1.8rem; text-align: center; }
+:root { --pine: #0f1f0f; --mist: #b0ceba; --sage: #6a9e7a; --cream: #f4efe6; --amber: #c07828; }
+body { font-family: 'DM Sans', sans-serif; background: var(--cream); margin: 0; }
+#pinScreen { position: fixed; inset: 0; z-index: 999; background: var(--pine); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; color: white; }
 .pinDots { display: flex; gap: 1rem; }
 .pinDot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--sage); }
 .pinDot.on { background: var(--amber); border-color: var(--amber); }
 .pinPad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.pinKey { background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--sage); padding: 1.2rem; border-radius: 10px; font-size: 1.5rem; }
-#app { display: none; }
-#app.visible { display: flex; flex-direction: column; height: 100vh; }
-header { background: var(--pine); color: white; padding: 1rem; }
-.syncStatus { font-size: 0.7rem; color: var(--sage); }
-.hidden { display: none !important; }
+.pinKey { background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--sage); padding: 1.5rem; border-radius: 10px; font-size: 1.5rem; cursor: pointer; }
+#app { display: none; padding: 2rem; }
+#app.visible { display: block; }
 </style>
 </head>
 <body>
 
 <div id="pinScreen">
-  <div class="pinTitle">Struss Road Trip 2026</div>
+  <h1>Struss Road Trip</h1>
   <div class="pinDots" id="pinDots">
     <div class="pinDot"></div><div class="pinDot"></div><div class="pinDot"></div><div class="pinDot"></div>
   </div>
@@ -114,14 +87,8 @@ header { background: var(--pine); color: white; padding: 1rem; }
 </div>
 
 <div id="app">
-  <header>
-    <h1>Road Trip App</h1>
-    <div class="syncStatus" id="syncStatus"><span>connecting...</span></div>
-  </header>
-  <main style="padding: 2rem;">
-    <h2>App Unlocked!</h2>
-    <p>Everything is now syncing with Supabase.</p>
-  </main>
+  <h1>App Unlocked!</h1>
+  <div id="syncStatus"><span>Status: Connecting...</span></div>
 </div>
 
 <script>
@@ -134,7 +101,10 @@ function pin(v) {
   document.querySelectorAll('.pinDot').forEach((d, i) => d.classList.toggle('on', i < _pinBuf.length));
   if (_pinBuf.length === 4) {
     if (_pinBuf === PIN) unlock();
-    else _pinBuf = '';
+    else {
+        _pinBuf = '';
+        document.querySelectorAll('.pinDot').forEach(d => d.classList.remove('on'));
+    }
   }
 }
 
@@ -146,7 +116,7 @@ async function unlock() {
 
 function setSyncStatus(msg) {
   const el = document.getElementById('syncStatus');
-  if (el) el.querySelector('span').textContent = msg;
+  if (el) el.querySelector('span').textContent = 'Status: ' + msg;
 }
 </script>
 </body>

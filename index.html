@@ -1505,8 +1505,40 @@ function saveJournal(){
 }
 
 // ══════════════════════════════════════════
-// PHOTO BOOK
+// PHOTO BOOK — generates standalone export
 // ══════════════════════════════════════════
+
+// Injects current S state into the book template and triggers download
+function generateBookExport(){
+  // Encode state as JSON to embed in the export file
+  const stateJSON=JSON.stringify(S).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+  // Fetch the book template (same origin), inject state, trigger download
+  fetch('book-export-generator.html')
+    .then(r=>r.text())
+    .then(html=>{
+      // Inject state right before </script> of buildBook call
+      const injected=html.replace(
+        'window.addEventListener(\'DOMContentLoaded\', buildBook);',
+        `// State injected from app\nconst INJECTED_STATE=${stateJSON};\nwindow.addEventListener('DOMContentLoaded',()=>{ try{ const ls=localStorage.getItem('tripS'); if(!ls) localStorage.setItem('tripS',JSON.stringify(INJECTED_STATE)); } catch(e){} buildBook(); });`
+      );
+      const blob=new Blob([injected],{type:'text/html'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download='struss-family-road-trip-2026.html';
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+    })
+    .catch(()=>{
+      // Fallback: open book template in new tab and let it read localStorage directly
+      window.open('book-export-generator.html','_blank');
+    });
+}
+
+// Opens the book generator in a new tab (works when both files are local)
+function openBookInNewTab(){
+  window.open('book-export-generator.html','_blank');
+}
+
 function renderBook(){
   const hasContent=S.journal.length>0||Object.values(S.hunt).some(h=>h.photo);
 
@@ -1521,12 +1553,16 @@ function renderBook(){
   }
 
   let html=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem" class="noPrint">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem" class="noPrint">
       <div>
         <div style="font-family:'Playfair Display',serif;font-size:1.15rem">Memory Book</div>
         <div class="muted" style="font-size:.72rem">Struss Family Road Trip 2026</div>
       </div>
-      <button class="btn btnAmber btnSm" onclick="printBook()">🖨️ Print / Save PDF</button>
+      <button class="btn btnAmber btnSm" onclick="openBookInNewTab()">📖 Open Book</button>
+    </div>
+    <div class="card" style="margin-bottom:.85rem;padding:.85rem;background:linear-gradient(135deg,rgba(30,58,30,0.08),rgba(61,107,74,0.06));border:1px solid rgba(61,107,74,0.15)" class="noPrint">
+      <div style="font-size:.78rem;font-weight:600;color:var(--moss);margin-bottom:.25rem">Landscape Print Edition</div>
+      <div class="muted" style="font-size:.72rem;line-height:1.55">Opens as a beautiful horizontal book with photo spreads, chapter pages, and polaroid gallery — optimized for printing or saving as PDF. Open in the same browser on a laptop for best results.</div>
     </div>
 
     <!-- COVER -->
@@ -1613,17 +1649,8 @@ function renderBook(){
 }
 
 function printBook(){
-  // Hide everything except book tab, print, restore
-  const tabs=document.querySelectorAll('[id^="t"]:not(#tBook)');
-  const header=document.querySelector('header');
-  tabs.forEach(t=>t.setAttribute('data-wasHidden',t.classList.contains('hidden')?'1':'0'));
-  tabs.forEach(t=>t.classList.add('hidden'));
-  header.style.display='none';
-  window.print();
-  setTimeout(()=>{
-    tabs.forEach(t=>{if(t.getAttribute('data-wasHidden')==='0')t.classList.remove('hidden');});
-    header.style.display='';
-  },1000);
+  // Legacy fallback — use openBookInNewTab() instead
+  openBookInNewTab();
 }
 window.addEventListener('DOMContentLoaded',()=>{
   // Pre-fill stop selects

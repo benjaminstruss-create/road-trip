@@ -1112,12 +1112,12 @@ Respond ONLY with a JSON object, no markdown, no explanation. Format:
   "tip": "1 practical insider tip for families",
   "maps": "best Google Maps search string to find this exact location"
 }`;
-    const res=await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyC9wUpk2Pm0CpY14sUOz7C6gC2pf4oJqeE',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:600,messages:[{role:'user',content:prompt}]})
     });
     const d=await res.json();
-    const text=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    const text=d.content?.find(c=>c.type==='text')?.text||'';
     const clean=text.replace(/```json|```/g,'').trim();
     const info=JSON.parse(clean);
     $('actName').value=info.name||name;
@@ -1466,12 +1466,12 @@ ${kid2?`Kid 2's highlight: "${kid2}"`:''}
 Location: ${stop.name} (${stop.park})
 
 Write a warm, vivid, 2-3 paragraph journal entry in first-person plural (we/our — the parents writing together). Keep it personal, specific, heartfelt. Capture emotions, sights, and family moments. 3-4 sentences per paragraph. Avoid clichés like "magical" or "breathtaking". Make it feel like a real family memory. Do not add headers or labels.`;
-    const res=await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=AIzaSyC9wUpk2Pm0CpY14sUOz7C6gC2pf4oJqeE',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({contents:[{parts:[{text:prompt}]}]})
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:1000,messages:[{role:'user',content:prompt}]})
     });
     const d=await res.json();
-    _polished=d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    _polished=d.content?.find(c=>c.type==='text')?.text||'';
     $('jAiArea').innerHTML=`<div class="aiResult">${_polished.replace(/\n\n/g,'<br><br>')}</div>`;
   }catch(e){$('jAiArea').innerHTML='<div class="muted">Could not reach AI — you can save raw notes.</div>';}
 }

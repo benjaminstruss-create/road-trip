@@ -675,12 +675,17 @@ async function loadState() {
   // Fetch Anthropic key from Supabase config table
   if (window.__supabaseReady && roadTripDb) {
     try {
-      const { data: cfgData } = await roadTripDb
+      const { data: cfgData, error: cfgError } = await roadTripDb
         .from('config')
         .select('value')
-        .eq('key', 'anthropic_key')
+        .eq('id', 1)
         .single();
-      if (cfgData?.value) _anthropicKey = cfgData.value;
+      if (!cfgError && cfgData?.value) {
+        _anthropicKey = cfgData.value;
+        console.log('Anthropic key loaded OK');
+      } else {
+        console.warn('Config fetch error:', cfgError);
+      }
     } catch(e) { console.warn('Could not load API key from config:', e.message); }
   }
 

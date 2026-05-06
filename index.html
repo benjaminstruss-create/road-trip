@@ -1322,31 +1322,60 @@ function toggleHunt(id){
   renderHunt();
 }
 
+async function uploadToStorage(file, folder) {
+  // Resize image to max 1200px before upload
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = async () => {
+        const canvas = document.createElement('canvas');
+        const MAX = 1200;
+        let w = img.width, h = img.height;
+        if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        canvas.toBlob(async blob => {
+          if (!window.__supabaseReady || !roadTripDb) {
+            // fallback: return base64 data URL
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+            return;
+          }
+          const filename = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+          const { data, error } = await roadTripDb.storage
+            .from(STORAGE_BUCKET)
+            .upload(filename, blob, { contentType: 'image/jpeg', upsert: false });
+          if (error) {
+            console.warn('Storage upload failed, using base64:', error.message);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+            return;
+          }
+          const { data: urlData } = roadTripDb.storage
+            .from(STORAGE_BUCKET)
+            .getPublicUrl(filename);
+          resolve(urlData.publicUrl);
+        }, 'image/jpeg', 0.82);
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function huntPhotoAdd(id){
   const inp=document.createElement('input');
   inp.type='file';inp.accept='image/*';inp.capture='environment';
-  inp.onchange=e=>{
+  inp.onchange=async e=>{
     const f=e.target.files[0];if(!f)return;
-    // Resize before storing to keep size manageable
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const img=new Image();
-      img.onload=()=>{
-        const canvas=document.createElement('canvas');
-        const MAX=600;
-        let w=img.width,h=img.height;
-        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
-        canvas.width=w;canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        const data=canvas.toDataURL('image/jpeg',0.8);
-        if(!S.hunt[id])S.hunt[id]={done:true,photo:null};
-        S.hunt[id].photo=data;
-        S.hunt[id].done=true; // auto-mark found when photo added
-        saveState();renderHunt();
-      };
-      img.src=ev.target.result;
-    };
-    reader.readAsDataURL(f);
+    // Show uploading state
+    if(!S.hunt[id])S.hunt[id]={done:true,photo:null};
+    S.hunt[id]._uploading=true;
+    renderHunt();
+    const url = await uploadToStorage(f, 'hunt');
+    S.hunt[id].photo = url;
+    S.hunt[id].done = true;
+    delete S.hunt[id]._uploading;
+    saveState();renderHunt();
   };
   inp.click();
 }
@@ -1402,15 +1431,26 @@ function openJournal(){
   renderJPhotoGrid();show('jModal');
 }
 function renderJPhotoGrid(){
-  let html=_jPhotos.map((p,i)=>`<div class="photoThumb"><img src="${p}" alt=""><button class="photoDel" onclick="rmJPhoto(${i})">✕</button></div>`).join('');
+  let html=_jPhotos.map((p,i)=> p==='__uploading__'
+    ? `<div class="photoThumb" style="display:flex;align-items:center;justify-content:center;background:var(--sand);font-size:.7rem;color:var(--textLight)">⏳</div>`
+    : `<div class="photoThumb"><img src="${p}" alt=""><button class="photoDel" onclick="rmJPhoto(${i})">✕</button></div>`
+  ).join('');
   if(_jPhotos.length<4)html+=`<div class="photoAdd" onclick="$('jPhotoFile').click()"><span>+</span><span>Photo</span></div>`;
   $('jPhotoGrid').innerHTML=html;
 }
 function rmJPhoto(i){_jPhotos.splice(i,1);renderJPhotoGrid();}
 function handlePhoto(e){
-  Array.from(e.target.files).slice(0,4-_jPhotos.length).forEach(f=>{
-    const r=new FileReader();r.onload=ev=>{_jPhotos.push(ev.target.result);renderJPhotoGrid();};r.readAsDataURL(f);
-  });e.target.value='';
+  const files = Array.from(e.target.files).slice(0, 4 - _jPhotos.length);
+  e.target.value = '';
+  files.forEach(async f => {
+    // Push a placeholder so the grid shows a spinner immediately
+    const placeholderIdx = _jPhotos.length;
+    _jPhotos.push('__uploading__');
+    renderJPhotoGrid();
+    const url = await uploadToStorage(f, 'journal');
+    _jPhotos[placeholderIdx] = url;
+    renderJPhotoGrid();
+  });
 }
 async function polishJournal(){
   const text=$('jText').value.trim();if(!text)return alert('Add some notes first!');

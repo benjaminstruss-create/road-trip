@@ -3,121 +3,1571 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Struss Road Trip 2026</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<title>Struss Family Road Trip 2026</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+<!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
 <script>
-  // ── CONFIGURATION ────────────────────────────────────────────────────────
-  const supabaseUrl = 'https://ppnsknbcavcaswelhfac.supabase.co';
-  const supabaseKey = 'sb_publishable_GMRYvSKaYhpNFoDhS4YANw_t3vE27Qe';
-  
-  // FIXED: Renamed to 'roadTripDb' to ensure it NEVER clashes with the library
+  // ── SUPABASE CONNECTION ───────────────────────────────────────────────────
+  // Variable is named "roadTripDb" to avoid clashing with the global "supabase"
+  // object that the CDN library creates automatically.
+  const SUPABASE_URL  = 'https://ppnsknbcavcaswelhfac.supabase.co';
+  const SUPABASE_KEY  = 'sb_publishable_GMRYvSKaYhpNFoDhS4YANw_t3vE27Qe';
+  const STORAGE_BUCKET = 'trip-photos';
+  const SYNC_ROW_ID   = 1;
+
   let roadTripDb;
-  
-  // We wrap this in a function to ensure the library is loaded first
-  window.onload = () => {
-    try {
-      roadTripDb = supabase.createClient(supabaseUrl, supabaseKey);
-      console.log("Supabase connection initialized!");
-    } catch (e) {
-      console.error("Initialization failed:", e);
-    }
-  };
+  try {
+    // supabase (the CDN global) exposes createClient
+    roadTripDb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    window.__supabaseReady = true;
+    console.log('Supabase connected');
 
-  // ── DATABASE SYNC ────────────────────────────────────────────────────────
-  async function saveState() {
-    localStorage.setItem('tripS', JSON.stringify(S));
-    if (!roadTripDb) return;
-
-    const { error } = await roadTripDb
-      .from('trip_data')
-      .upsert({ id: 1, category: 'full_state', content: S });
-
-    if (error) setSyncStatus('error');
-    else setSyncStatus('synced');
+    // Real-time listener: push remote changes to all open tabs
+    roadTripDb
+      .channel('trip_data_changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'trip_data',
+        filter: `id=eq.${SYNC_ROW_ID}`
+      }, (payload) => {
+        const remote = payload.new?.content;
+        if (remote) {
+          window.__remoteState = remote;
+          if (window.__appReady) mergeRemoteState(remote);
+        }
+      })
+      .subscribe();
+  } catch(e) {
+    console.warn('Supabase not available, falling back to localStorage:', e.message);
+    window.__supabaseReady = false;
   }
-
-  async function loadState() {
-    if (!roadTripDb) {
-        console.log("Database not ready yet, retrying...");
-        return;
-    }
-
-    const { data, error } = await roadTripDb
-      .from('trip_data')
-      .select('content')
-      .eq('id', 1)
-      .single();
-
-    if (data && data.content) {
-      S = { ...S, ...data.content };
-      setSyncStatus('synced');
-    }
-  }
+  // ─────────────────────────────────────────────────────────────────────────
 </script>
 
 <style>
-:root { --pine: #0f1f0f; --mist: #b0ceba; --sage: #6a9e7a; --cream: #f4efe6; --amber: #c07828; }
-body { font-family: 'DM Sans', sans-serif; background: var(--cream); margin: 0; }
-#pinScreen { position: fixed; inset: 0; z-index: 999; background: var(--pine); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; color: white; }
-.pinDots { display: flex; gap: 1rem; }
-.pinDot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--sage); }
-.pinDot.on { background: var(--amber); border-color: var(--amber); }
-.pinPad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.pinKey { background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--sage); padding: 1.5rem; border-radius: 10px; font-size: 1.5rem; cursor: pointer; }
-#app { display: none; padding: 2rem; }
-#app.visible { display: block; }
+:root {
+  --pine: #0f1f0f;
+  --forest: #1e3a1e;
+  --moss: #3d6b4a;
+  --sage: #6a9e7a;
+  --mist: #b0ceba;
+  --cream: #f4efe6;
+  --sand: #e6dcc8;
+  --sandDark: #d8cdb8;
+  --amber: #c07828;
+  --amberLight: #e8a04a;
+  --sky: #4a7fa0;
+  --card: rgba(255,255,255,0.94);
+  --shadow: 0 2px 16px rgba(15,31,15,0.10);
+  --shadowHover: 0 6px 28px rgba(15,31,15,0.18);
+  --radius: 16px;
+  --text: #1a1a18;
+  --textMid: #4a4a46;
+  --textLight: #7a7a74;
+  --border: rgba(0,0,0,0.07);
+}
+[data-dark] {
+  --cream: #0c160c;
+  --sand: #142014;
+  --sandDark: #1c2e1c;
+  --card: rgba(20,38,20,0.97);
+  --shadow: 0 2px 16px rgba(0,0,0,0.35);
+  --text: #e4ede4;
+  --textMid: #9ab89a;
+  --textLight: #6a8a6a;
+  --border: rgba(255,255,255,0.07);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body { font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text); overflow-x: hidden; }
+
+/* ── PIN ── */
+#pinScreen {
+  position: fixed; inset: 0; z-index: 999;
+  background: var(--pine);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 1.75rem;
+  padding: 2rem;
+}
+.pinTitle { font-family: 'Playfair Display', serif; color: var(--mist); font-size: clamp(1.6rem,5vw,2.4rem); text-align: center; line-height: 1.2; }
+.pinSub { color: var(--sage); font-size: .8rem; }
+.pinDots { display: flex; gap: .9rem; }
+.pinDot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--sage); transition: all .2s; }
+.pinDot.on { background: var(--amber); border-color: var(--amber); transform: scale(1.15); }
+.pinPad { display: grid; grid-template-columns: repeat(3,1fr); gap: .65rem; max-width: 240px; width: 100%; }
+.pinKey { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); color: var(--mist); font-family: 'DM Sans',sans-serif; font-size: 1.4rem; font-weight: 500; padding: .9rem; border-radius: 12px; cursor: pointer; transition: all .12s; user-select: none; }
+.pinKey:active { background: rgba(200,120,40,.35); transform: scale(.94); }
+.pinErr { color: #e08080; font-size: .8rem; min-height: 1.2em; }
+
+/* ── LAYOUT ── */
+#app { display: none; flex-direction: column; height: 100vh; }
+#app.visible { display: flex; }
+
+/* ── HEADER ── */
+header { background: var(--pine); padding: .9rem 1rem 0; position: sticky; top: 0; z-index: 100; }
+.hTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: .7rem; }
+.hTitle h1 { font-family: 'Playfair Display',serif; font-size: 1.15rem; color: var(--mist); line-height: 1; }
+.hTitle p { font-size: .7rem; color: var(--sage); margin-top: 2px; }
+.hActions { display: flex; gap: .4rem; }
+.iconBtn { background: rgba(255,255,255,.09); border: none; color: var(--mist); width: 34px; height: 34px; border-radius: 10px; cursor: pointer; font-size: .95rem; display: flex; align-items: center; justify-content: center; transition: background .15s; }
+.iconBtn:active { background: rgba(255,255,255,.2); }
+
+/* ── TABS ── */
+nav { display: flex; overflow-x: auto; scrollbar-width: none; border-top: 1px solid rgba(255,255,255,.06); }
+nav::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: .55rem .8rem; font-size: .68rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--sage); border: none; background: transparent; cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; white-space: nowrap; }
+.tab.on { color: var(--mist); border-bottom-color: var(--amber); }
+
+/* ── MAIN ── */
+main { flex: 1; overflow-y: auto; padding: 1.1rem; max-width: 640px; margin: 0 auto; width: 100%; }
+
+/* ── CARDS ── */
+.card { background: var(--card); border-radius: var(--radius); padding: 1.15rem; margin-bottom: .85rem; box-shadow: var(--shadow); }
+.cardTitle { font-family: 'Playfair Display',serif; font-size: 1.05rem; color: var(--moss); margin-bottom: .7rem; }
+[data-dark] .cardTitle { color: var(--sage); }
+.sectionLabel { font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--textLight); margin: 1rem 0 .6rem; }
+
+/* ── TODAY BANNER ── */
+.todayBanner { background: linear-gradient(135deg, var(--forest), var(--moss)); border-radius: var(--radius); padding: 1.15rem; margin-bottom: .85rem; color: white; box-shadow: var(--shadow); }
+.todayLabel { font-size: .65rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; opacity: .75; }
+.todayLoc { font-family: 'Playfair Display',serif; font-size: 1.55rem; margin: .2rem 0; }
+.todayPark { font-size: .8rem; opacity: .85; }
+.todayDay { font-size: .72rem; opacity: .65; margin-top: .2rem; }
+
+/* ── STOPS ── */
+.stopCard { background: var(--card); border-radius: var(--radius); padding: .95rem 1.1rem; margin-bottom: .7rem; box-shadow: var(--shadow); border-left: 4px solid var(--moss); cursor: pointer; transition: transform .12s, box-shadow .12s; }
+.stopCard:active { transform: scale(.99); box-shadow: var(--shadowHover); }
+.stopCard.active { border-left-color: var(--amber); }
+.stopName { font-family: 'Playfair Display',serif; font-size: 1rem; }
+.stopPark { font-size: .75rem; color: var(--moss); font-weight: 600; margin-top: 1px; }
+.stopDates { font-size: .7rem; color: var(--textLight); margin-top: 3px; }
+.stopRow { display: flex; justify-content: space-between; align-items: flex-start; }
+.badge { background: var(--amber); color: white; font-size: .6rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: .05em; }
+
+/* ── ACTIVITIES ── */
+.actItem { display: flex; align-items: flex-start; gap: .65rem; padding: .65rem 0; border-bottom: 1px solid var(--border); }
+.actItem:last-child { border-bottom: none; }
+.actCheck { width: 22px; height: 22px; border-radius: 7px; border: 2px solid var(--moss); background: transparent; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: .7rem; transition: all .18s; margin-top: 1px; color: white; }
+.actCheck.done { background: var(--moss); border-color: var(--moss); }
+.actBody { flex: 1; cursor: pointer; }
+.actName { font-size: .875rem; line-height: 1.3; }
+.actName.done { text-decoration: line-through; opacity: .45; }
+.actMeta { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .3rem; }
+.tag { font-size: .6rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: .03em; }
+.tag.must { background: #fde8cc; color: #8a5010; }
+.tag.hike { background: #d4ead6; color: #1e4a24; }
+.tag.food { background: #fdddd8; color: #8a2a1a; }
+.tag.view { background: #d8e8f8; color: #1a3a6a; }
+.tag.water { background: #d4ecf8; color: #1a4a6a; }
+[data-dark] .tag.must { background: #5a3010; color: #e8a060; }
+[data-dark] .tag.hike { background: #103020; color: #60c880; }
+[data-dark] .tag.food { background: #501818; color: #e88070; }
+[data-dark] .tag.view { background: #102040; color: #60a0e0; }
+[data-dark] .tag.water { background: #102840; color: #60b8e0; }
+.actDel { background: none; border: none; color: var(--textLight); cursor: pointer; font-size: .85rem; padding: .2rem; flex-shrink: 0; }
+
+/* ── SWIPE TO DELETE ── */
+.swipeWrap { position: relative; overflow: hidden; border-bottom: 1px solid var(--border); }
+.swipeWrap:last-child { border-bottom: none; }
+.swipeDeleteBg { position: absolute; right: 0; top: 0; bottom: 0; width: 80px; background: #c0392b; display: flex; align-items: center; justify-content: center; color: white; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; pointer-events: none; opacity: 0; transition: opacity .15s; border-radius: 0 8px 8px 0; }
+.swipeDeleteBg.vis { opacity: 1; }
+.swipeRow { display: flex; align-items: flex-start; gap: .65rem; padding: .65rem 0; background: var(--card); position: relative; touch-action: pan-y; will-change: transform; }
+
+/* ── ACTIVITY DETAIL SHEET ── */
+.detailSheet { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.45); display: flex; align-items: flex-end; backdrop-filter: blur(3px); }
+.detailBox { background: var(--cream); border-radius: 22px 22px 0 0; padding: 1.5rem; width: 100%; max-width: 640px; margin: 0 auto; max-height: 75vh; overflow-y: auto; }
+.detailBox h2 { font-family: 'Playfair Display',serif; font-size: 1.25rem; margin-bottom: .5rem; }
+.detailGrid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin: .85rem 0; }
+.detailStat { background: var(--sand); border-radius: 10px; padding: .6rem .75rem; }
+[data-dark] .detailStat { background: var(--sandDark); }
+.detailStatLabel { font-size: .62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--textLight); font-weight: 600; }
+.detailStatVal { font-size: .9rem; font-weight: 600; margin-top: 2px; }
+.detailDesc { font-size: .875rem; line-height: 1.65; color: var(--textMid); }
+.detailTip { background: linear-gradient(135deg,rgba(61,107,74,.12),rgba(74,127,160,.1)); border-left: 3px solid var(--moss); border-radius: 0 10px 10px 0; padding: .65rem .85rem; font-size: .8rem; line-height: 1.55; margin-top: .75rem; color: var(--textMid); }
+
+/* ── BUDGET ── */
+.budgetBig { text-align: center; margin-bottom: .85rem; }
+.budgetAmt { font-family: 'Playfair Display',serif; font-size: 2.1rem; color: var(--forest); }
+[data-dark] .budgetAmt { color: var(--sage); }
+.progressBar { background: var(--sand); border-radius: 8px; height: 9px; overflow: hidden; margin: .6rem 0 .3rem; }
+.progressFill { height: 100%; border-radius: 8px; background: linear-gradient(90deg,var(--moss),var(--amber)); transition: width .5s ease; }
+.catGrid { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; margin-top: .75rem; }
+.catCard { background: var(--sand); border-radius: 12px; padding: .75rem; cursor: pointer; transition: transform .12s; }
+[data-dark] .catCard { background: var(--sandDark); }
+.catCard:active { transform: scale(.97); }
+.catName { font-size: .68rem; color: var(--textLight); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+.catSpent { font-size: 1rem; font-weight: 700; margin-top: 2px; }
+.catBudget { font-size: .68rem; color: var(--textLight); }
+.expItem { display: flex; justify-content: space-between; align-items: center; padding: .55rem 0; border-bottom: 1px solid var(--border); }
+.expItem:last-child { border-bottom: none; }
+.expDesc { font-size: .84rem; }
+.expMeta { font-size: .68rem; color: var(--textLight); }
+.expAmt { font-weight: 700; font-size: .9rem; }
+.expDel { background: none; border: none; color: #c06060; cursor: pointer; font-size: .85rem; padding: .2rem .3rem; }
+
+/* ── JOURNAL ── */
+.jEntry { background: var(--card); border-radius: var(--radius); padding: 1.15rem; margin-bottom: .75rem; box-shadow: var(--shadow); }
+.jDate { font-size: .68rem; color: var(--textLight); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.jLoc { font-family: 'Playfair Display',serif; font-size: 1rem; margin: .2rem 0; }
+.jText { font-size: .85rem; line-height: 1.65; color: var(--textMid); margin-top: .45rem; }
+.jKids { margin-top: .65rem; padding-top: .65rem; border-top: 1px dashed var(--border); }
+.kidLabel { font-size: .62rem; font-weight: 700; color: var(--amber); text-transform: uppercase; letter-spacing: .05em; }
+.kidNote { font-size: .8rem; font-style: italic; color: var(--textMid); margin-top: 1px; }
+.photoGrid { display: grid; grid-template-columns: repeat(3,1fr); gap: .45rem; margin-top: .65rem; }
+.photoThumb { aspect-ratio: 1; border-radius: 10px; overflow: hidden; position: relative; }
+.photoThumb img { width: 100%; height: 100%; object-fit: cover; }
+.photoDel { position: absolute; top: 3px; right: 3px; background: rgba(0,0,0,.65); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: .65rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.photoAdd { aspect-ratio: 1; border-radius: 10px; border: 2px dashed var(--mist); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; color: var(--textLight); gap: .2rem; background: transparent; font-size: 1.4rem; }
+.photoAdd span { font-size: .6rem; text-transform: uppercase; letter-spacing: .05em; }
+.aiResult { background: linear-gradient(135deg,rgba(61,107,74,.08),rgba(74,127,160,.08)); border: 1px solid var(--mist); border-radius: 12px; padding: .9rem; font-size: .85rem; line-height: 1.7; margin-top: .75rem; }
+
+/* ── SCAVENGER ── */
+.huntCard { background: var(--card); border-radius: var(--radius); padding: 1.1rem; margin-bottom: .75rem; box-shadow: var(--shadow); }
+.huntHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: .65rem; cursor: pointer; }
+.huntCatTitle { font-family: 'Playfair Display',serif; font-size: 1rem; display: flex; align-items: center; gap: .5rem; }
+.huntProgress { font-size: .75rem; color: var(--textLight); }
+.huntItem { display: flex; align-items: flex-start; gap: .65rem; padding: .6rem 0; border-bottom: 1px solid var(--border); }
+.huntItem:last-child { border-bottom: none; }
+.huntCheck { width: 24px; height: 24px; border-radius: 8px; border: 2px solid var(--amber); background: transparent; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: .75rem; transition: all .18s; color: white; }
+.huntCheck.done { background: var(--amber); border-color: var(--amber); }
+.huntBody { flex: 1; }
+.huntName { font-size: .88rem; font-weight: 600; }
+.huntHint { font-size: .75rem; color: var(--textLight); margin-top: 2px; line-height: 1.4; }
+.huntDiff { font-size: .62rem; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+.huntDiff.easy { background: #d4ead6; color: #1e4a24; }
+.huntDiff.medium { background: #fde8cc; color: #8a5010; }
+.huntDiff.hard { background: #f8d8d8; color: #8a1010; }
+[data-dark] .huntDiff.easy { background: #103020; color: #60c880; }
+[data-dark] .huntDiff.medium { background: #5a3010; color: #e8a060; }
+[data-dark] .huntDiff.hard { background: #501010; color: #e86060; }
+.huntPhoto { width: 48px; height: 48px; border-radius: 8px; overflow: hidden; flex-shrink: 0; cursor: pointer; position: relative; }
+.huntPhoto img { width: 100%; height: 100%; object-fit: cover; }
+.huntPhotoEmpty { width: 48px; height: 48px; border-radius: 8px; border: 2px dashed var(--mist); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; cursor: pointer; }
+.huntStats { display: grid; grid-template-columns: repeat(3,1fr); gap: .65rem; margin-bottom: .85rem; }
+.huntStat { background: var(--card); border-radius: 12px; padding: .75rem; text-align: center; box-shadow: var(--shadow); }
+.huntStatNum { font-family: 'Playfair Display',serif; font-size: 1.7rem; color: var(--amber); }
+.huntStatLabel { font-size: .65rem; color: var(--textLight); text-transform: uppercase; letter-spacing: .05em; }
+
+/* ── FORMS ── */
+input, textarea, select { width: 100%; background: var(--sand); border: 1.5px solid transparent; border-radius: 10px; padding: .6rem .8rem; font-family: 'DM Sans',sans-serif; font-size: .875rem; color: var(--text); outline: none; transition: border-color .18s; margin-bottom: .55rem; }
+[data-dark] input, [data-dark] textarea, [data-dark] select { background: var(--sandDark); color: var(--text); }
+input:focus, textarea:focus, select:focus { border-color: var(--moss); }
+textarea { resize: vertical; min-height: 80px; }
+label { font-size: .68rem; font-weight: 600; color: var(--textLight); display: block; margin-bottom: .18rem; text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── BUTTONS ── */
+.btn { background: var(--forest); color: white; border: none; border-radius: 12px; padding: .7rem 1.1rem; font-family: 'DM Sans',sans-serif; font-size: .875rem; font-weight: 600; cursor: pointer; width: 100%; transition: background .15s, transform .1s; }
+.btn:active { transform: scale(.98); }
+.btnAmber { background: var(--amber); }
+.btnSm { padding: .45rem .9rem; font-size: .78rem; width: auto; border-radius: 9px; }
+.btnOutline { background: transparent; border: 1.5px solid var(--moss); color: var(--moss); }
+.btnRow { display: flex; gap: .5rem; margin-top: .65rem; }
+.btnDanger { background: transparent; border: 1.5px solid #c06060; color: #c06060; }
+
+/* ── MODAL ── */
+.overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,.48); display: flex; align-items: flex-end; backdrop-filter: blur(4px); }
+.sheet { background: var(--cream); border-radius: 22px 22px 0 0; padding: 1.4rem; width: 100%; max-width: 640px; margin: 0 auto; max-height: 88vh; overflow-y: auto; }
+.sheetTitle { font-family: 'Playfair Display',serif; font-size: 1.15rem; margin-bottom: .85rem; display: flex; justify-content: space-between; align-items: center; }
+.closeBtn { background: var(--sand); border: none; border-radius: 8px; padding: .25rem .65rem; cursor: pointer; font-size: .82rem; color: var(--textLight); }
+[data-dark] .closeBtn { background: var(--sandDark); }
+
+.hidden { display: none !important; }
+.flex { display: flex; }
+.gap { gap: .5rem; }
+.mt { margin-top: .65rem; }
+.center { text-align: center; }
+.muted { color: var(--textLight); font-size: .82rem; }
+.syncStatus { font-size: .62rem; color: var(--sage); margin-top: 2px; display: flex; align-items: center; gap: .3rem; }
+.syncDot { width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
+
+/* ── HUNT REFERENCE IMAGES ── */
+.huntItemInner { display: flex; align-items: flex-start; gap: .65rem; padding: .75rem 0; border-bottom: 1px solid var(--border); }
+.huntItemInner:last-child { border-bottom: none; }
+.huntRefImg { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0; cursor: pointer; }
+.huntRefImgPlaceholder { width: 64px; height: 64px; border-radius: 10px; background: var(--sand); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; }
+[data-dark] .huntRefImgPlaceholder { background: var(--sandDark); }
+.huntProofArea { display: flex; flex-direction: column; align-items: center; gap: .2rem; flex-shrink: 0; }
+.huntProofThumb { width: 52px; height: 52px; border-radius: 8px; overflow: hidden; position: relative; cursor: pointer; }
+.huntProofThumb img { width: 100%; height: 100%; object-fit: cover; }
+.huntProofAdd { width: 52px; height: 52px; border-radius: 8px; border: 2px dashed var(--amber); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; color: var(--amber); background: transparent; }
+.huntProofLabel { font-size: .55rem; color: var(--textLight); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ── ACT MODAL — centered, above all other sheets ── */
+.centeredOverlay { position: fixed; inset: 0; z-index: 400; background: rgba(0,0,0,.52); display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px); }
+.centeredSheet { background: var(--cream); border-radius: 20px; padding: 1.4rem; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+
+/* ── BOOK TAB ── */
+.bookChapter { break-inside: avoid; margin-bottom: 2rem; }
+.bookChapterTitle { font-family: 'Playfair Display',serif; font-size: 1.4rem; color: var(--forest); border-bottom: 2px solid var(--moss); padding-bottom: .4rem; margin-bottom: .85rem; }
+[data-dark] .bookChapterTitle { color: var(--sage); border-bottom-color: var(--sage); }
+.bookEntry { margin-bottom: 1.25rem; }
+.bookEntryDate { font-size: .68rem; color: var(--textLight); text-transform: uppercase; letter-spacing: .06em; }
+.bookEntryText { font-size: .875rem; line-height: 1.75; margin-top: .3rem; color: var(--textMid); }
+.bookPhotoRow { display: grid; grid-template-columns: repeat(3,1fr); gap: .4rem; margin-top: .6rem; }
+.bookPhotoRow img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.bookKidQuote { font-style: italic; font-size: .8rem; color: var(--amber); margin-top: .4rem; padding-left: .75rem; border-left: 2px solid var(--amber); }
+.bookHuntSection { margin-top: 1rem; }
+.bookHuntGrid { display: grid; grid-template-columns: repeat(3,1fr); gap: .5rem; margin-top: .5rem; }
+.bookHuntItem { border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 1; }
+.bookHuntItem img { width: 100%; height: 100%; object-fit: cover; }
+.bookHuntLabel { position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,.6); color: white; font-size: .55rem; padding: 3px 5px; text-align: center; }
+.bookEmpty { text-align: center; padding: 2rem; color: var(--textLight); }
+
+/* ── CELEBRATE ── */
+@keyframes pop { 0%{transform:scale(0.5);opacity:0} 70%{transform:scale(1.2)} 100%{transform:scale(1);opacity:1} }
+.celebrate { animation: pop .35s ease forwards; }
+
+@media print {
+  header, nav, #tHome, #tItinerary, #tBudget, #tActivities, #tHunt, #tJournal, .noPrint { display: none !important; }
+  #tBook { display: block !important; }
+  body { background: white; }
+}
 </style>
 </head>
 <body>
 
+<!-- ══ PIN ══ -->
 <div id="pinScreen">
-  <h1>Struss Road Trip</h1>
+  <div style="text-align:center">
+    <div style="font-size:3rem;margin-bottom:.5rem">🏔️</div>
+    <div class="pinTitle">Struss Family<br>Road Trip 2026</div>
+    <div class="pinSub" style="margin-top:.4rem">Jun 27 – Jul 27</div>
+  </div>
   <div class="pinDots" id="pinDots">
-    <div class="pinDot"></div><div class="pinDot"></div><div class="pinDot"></div><div class="pinDot"></div>
+    <div class="pinDot"></div><div class="pinDot"></div>
+    <div class="pinDot"></div><div class="pinDot"></div>
   </div>
   <div class="pinPad">
-    <button class="pinKey" onclick="pin('1')">1</button><button class="pinKey" onclick="pin('2')">2</button><button class="pinKey" onclick="pin('3')">3</button>
-    <button class="pinKey" onclick="pin('4')">4</button><button class="pinKey" onclick="pin('5')">5</button><button class="pinKey" onclick="pin('6')">6</button>
-    <button class="pinKey" onclick="pin('7')">7</button><button class="pinKey" onclick="pin('8')">8</button><button class="pinKey" onclick="pin('9')">9</button>
+    <button class="pinKey" onclick="pin('1')">1</button>
+    <button class="pinKey" onclick="pin('2')">2</button>
+    <button class="pinKey" onclick="pin('3')">3</button>
+    <button class="pinKey" onclick="pin('4')">4</button>
+    <button class="pinKey" onclick="pin('5')">5</button>
+    <button class="pinKey" onclick="pin('6')">6</button>
+    <button class="pinKey" onclick="pin('7')">7</button>
+    <button class="pinKey" onclick="pin('8')">8</button>
+    <button class="pinKey" onclick="pin('9')">9</button>
+    <button class="pinKey" onclick="pin('clr')" style="font-size:.8rem">CLR</button>
     <button class="pinKey" onclick="pin('0')">0</button>
+    <button class="pinKey" onclick="pin('back')">⌫</button>
+  </div>
+  <div class="pinErr" id="pinErr">&nbsp;</div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app">
+  <header>
+    <div class="hTop">
+      <div class="hTitle">
+        <h1>Struss Road Trip</h1>
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <p>Jun 27 – Jul 27, 2026</p>
+          <div class="syncStatus" id="syncStatus"><div class="syncDot"></div><span>local</span></div>
+        </div>
+      </div>
+      <div class="hActions">
+        <button class="iconBtn" id="themeBtn" onclick="toggleTheme()">🌙</button>
+        <button class="iconBtn" onclick="lockApp()">🔒</button>
+      </div>
+    </div>
+    <nav>
+      <button class="tab on" onclick="goTab('home')">Home</button>
+      <button class="tab" onclick="goTab('itinerary')">Itinerary</button>
+      <button class="tab" onclick="goTab('budget')">Budget</button>
+      <button class="tab" onclick="goTab('activities')">Activities</button>
+      <button class="tab" onclick="goTab('hunt')">🔍 Hunt</button>
+      <button class="tab" onclick="goTab('journal')">Journal</button>
+      <button class="tab" onclick="goTab('book')">📖 Book</button>
+    </nav>
+  </header>
+
+  <main>
+    <div id="tHome"></div>
+    <div id="tItinerary" class="hidden"></div>
+    <div id="tBudget" class="hidden"></div>
+    <div id="tActivities" class="hidden"></div>
+    <div id="tHunt" class="hidden"></div>
+    <div id="tJournal" class="hidden"></div>
+    <div id="tBook" class="hidden"></div>
+  </main>
+</div>
+
+<!-- ══ ACTIVITY DETAIL SHEET ══ -->
+<div class="detailSheet hidden" id="detailSheet" onclick="closeDetail(event)">
+  <div class="detailBox" id="detailBox"></div>
+</div>
+
+<!-- ══ EXPENSE MODAL ══ -->
+<div class="overlay hidden" id="expModal" onclick="closeOverlay(event,'expModal')">
+  <div class="sheet">
+    <div class="sheetTitle">Add Expense <button class="closeBtn" onclick="hide('expModal')">✕ close</button></div>
+    <label>Description</label>
+    <input id="eDesc" placeholder="Gas fill-up, groceries run...">
+    <label>Amount (USD $)</label>
+    <input id="eAmt" type="number" placeholder="0.00" step="0.01">
+    <label>Category</label>
+    <select id="eCat">
+      <option value="fuel">⛽ Fuel</option>
+      <option value="groceries">🛒 Groceries</option>
+      <option value="restaurants">🍔 Restaurants</option>
+      <option value="activities">🎒 Activities</option>
+      <option value="misc">📦 Misc</option>
+    </select>
+    <label>Stop</label>
+    <select id="eStop"></select>
+    <button class="btn btnAmber mt" onclick="saveExpense()">Save Expense</button>
   </div>
 </div>
 
-<div id="app">
-  <h1>App Unlocked!</h1>
-  <div id="syncStatus"><span>Status: Connecting...</span></div>
+<!-- ══ JOURNAL MODAL ══ -->
+<div class="overlay hidden" id="jModal" onclick="closeOverlay(event,'jModal')">
+  <div class="sheet">
+    <div class="sheetTitle">Journal Entry <button class="closeBtn" onclick="hide('jModal')">✕ close</button></div>
+    <label>Stop</label>
+    <select id="jStop"></select>
+    <label>Your rough notes (AI will polish into a beautiful story)</label>
+    <textarea id="jText" placeholder="What happened today? What did you see, feel, eat? Doesn't have to be pretty — just honest."></textarea>
+    <label>Kid 1's highlight of the day</label>
+    <input id="jKid1" placeholder="What was your favourite thing today?">
+    <label>Kid 2's highlight of the day</label>
+    <input id="jKid2" placeholder="What was your favourite thing today?">
+    <label>Photos (up to 4 — or link Google Drive URL)</label>
+    <div class="photoGrid" id="jPhotoGrid"></div>
+    <input type="file" id="jPhotoFile" accept="image/*" class="hidden" onchange="handlePhoto(event)">
+    <div id="jAiArea"></div>
+    <div class="btnRow">
+      <button class="btn btnOutline btnSm" onclick="polishJournal()">✨ Polish with AI</button>
+      <button class="btn btnSm" onclick="saveJournal()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ADD ACTIVITY MODAL (centered) ══ -->
+<div class="centeredOverlay hidden" id="actModal" onclick="closeOverlay(event,'actModal')">
+  <div class="centeredSheet">
+    <div class="sheetTitle" id="actModalTitle">Add Activity <button class="closeBtn" onclick="hide('actModal')">✕ close</button></div>
+    <label>Stop</label>
+    <select id="actStop"></select>
+    <label>Activity or Hike Name</label>
+    <div class="flex gap" style="margin-bottom:.55rem">
+      <input id="actName" placeholder="e.g. Grinnell Glacier hike" style="margin-bottom:0;flex:1">
+      <button class="btn btnOutline btnSm" style="white-space:nowrap;flex-shrink:0" onclick="aiLookupActivity()">🔍 Find with AI</button>
+    </div>
+    <div id="actAiStatus" class="muted" style="font-size:.72rem;margin-bottom:.4rem;min-height:1em"></div>
+    <label>Type</label>
+    <select id="actTag">
+      <option value="must">⭐ Must-Do</option>
+      <option value="hike">🥾 Hike</option>
+      <option value="food">🍔 Food Stop</option>
+      <option value="view">📸 Viewpoint</option>
+      <option value="water">🚣 Water</option>
+    </select>
+    <div class="flex gap">
+      <div style="flex:1"><label>Distance</label><input id="actDist" placeholder="e.g. 8.4 miles rt" style="margin-bottom:0"></div>
+      <div style="flex:1"><label>Duration</label><input id="actDur" placeholder="e.g. 4–5 hours" style="margin-bottom:0"></div>
+    </div>
+    <label style="margin-top:.55rem">Difficulty</label>
+    <select id="actDiff">
+      <option value="">—</option>
+      <option value="Easy">Easy</option>
+      <option value="Moderate">Moderate</option>
+      <option value="Hard">Hard</option>
+      <option value="Very Hard">Very Hard</option>
+    </select>
+    <label>Description</label>
+    <textarea id="actDesc" placeholder="What's great about this? Tips for the family?" style="min-height:70px"></textarea>
+    <label>Insider Tip</label>
+    <input id="actTip" placeholder="Parking, timing, what to bring...">
+    <label>Google Maps Search Term (optional)</label>
+    <input id="actMaps" placeholder="e.g. Hidden Lake Overlook Glacier National Park">
+    <input type="hidden" id="actEditId">
+    <button class="btn btnAmber mt" onclick="saveActivity()">Save Activity</button>
+  </div>
 </div>
 
 <script>
-let S = { expenses: [], journal: [] };
-const PIN = '2829';
-let _pinBuf = '';
+// ══════════════════════════════════════════
+// DATA
+// ══════════════════════════════════════════
+const STOPS = [
+  { id:'driggs', name:'Driggs, ID', park:'Grand Teton NP', dates:'Jun 27–Jul 1', start:'2026-06-27', end:'2026-07-01', emoji:'🏔️', nights:4 },
+  { id:'emigrant', name:'Emigrant, MT', park:'Yellowstone NP', dates:'Jul 1–6', start:'2026-07-01', end:'2026-07-06', emoji:'🌋', nights:5 },
+  { id:'kalispell', name:'Kalispell, MT', park:'Glacier NP', dates:'Jul 6–12', start:'2026-07-06', end:'2026-07-12', emoji:'🧊', nights:6 },
+  { id:'golden', name:'Golden, BC', park:'Yoho NP', dates:'Jul 12–15', start:'2026-07-12', end:'2026-07-15', emoji:'🌊', nights:3 },
+  { id:'canmore', name:'Canmore, AB', park:'Banff NP', dates:'Jul 15–20', start:'2026-07-15', end:'2026-07-20', emoji:'🏞️', nights:5 },
+  { id:'hinton', name:'Hinton, AB', park:'Jasper NP', dates:'Jul 20–24', start:'2026-07-20', end:'2026-07-24', emoji:'⭐', nights:4 },
+  { id:'nordegg', name:'Nordegg, AB', park:'David Thompson', dates:'Jul 24–26', start:'2026-07-24', end:'2026-07-26', emoji:'🌌', nights:2 },
+];
 
-function pin(v) {
-  if (_pinBuf.length < 4) _pinBuf += v;
-  document.querySelectorAll('.pinDot').forEach((d, i) => d.classList.toggle('on', i < _pinBuf.length));
-  if (_pinBuf.length === 4) {
-    if (_pinBuf === PIN) unlock();
-    else {
-        _pinBuf = '';
-        document.querySelectorAll('.pinDot').forEach(d => d.classList.remove('on'));
+const DEFAULT_ACTIVITIES = {
+  driggs: [
+    { id:'d1', name:'Snake River Overlook at Sunrise', tag:'must', dist:'Short walk', dur:'1 hour', diff:'Easy', maps:'Snake River Overlook Grand Teton National Park Wyoming', desc:'One of the most iconic sunrise spots in the American West. The Teton Range reflected in the Snake River at dawn is unforgettable. Arrive 30-45 min before sunrise.', tip:'Park at the Snake River Overlook pullout on Hwy 89/26. Bring layers. Best photo spot for the whole trip.' },
+    { id:'d2', name:'Jenny Lake Boat + Inspiration Point', tag:'must', dist:'4 miles', dur:'3 hours', diff:'Moderate', maps:'Jenny Lake Boat Dock Grand Teton National Park', desc:'Take the shuttle boat across Jenny Lake then hike to Inspiration Point. The boat ride alone is worth it for kids.', tip:'Take the 8am boat from the east dock. The hike to Inspiration Point is steep but short.' },
+    { id:'d3', name:'Mormon Row Historic District', tag:'view', dist:'0.5 miles', dur:'1 hour', diff:'Easy', maps:'Mormon Row Historic District Moose Wyoming', desc:'Two iconic red barns in front of the Teton Range. Walk the dirt road past the Moulton homesteads. Bison graze here regularly.', tip:'Golden hour gives spectacular light. Keep 75 feet from bison.' },
+    { id:'d4', name:'Cascade Canyon Hike', tag:'hike', dist:'9 miles rt', dur:'4-5 hours', diff:'Moderate', maps:'Cascade Canyon Trail Jenny Lake Grand Teton', desc:'Grand Teton\'s most spectacular valley hike. A flat glacial canyon flanked by massive walls. Wildflowers, waterfalls, moose sightings common.', tip:'Combine with Inspiration Point. Pack lunch - no services in canyon.' },
+    { id:'d5', name:'Wildlife Watch at Willow Flats & Oxbow Bend', tag:'must', dist:'Roadside', dur:'1 hour', diff:'Easy', maps:'Oxbow Bend Turnout Grand Teton National Park', desc:'Two of the best wildlife spots in the park. Willow Flats for moose and elk; Oxbow Bend for herons, osprey, and bears.', tip:'Binoculars essential. Oxbow Bend is best at sunrise.' },
+    { id:'d6', name:'Colter Bay Beach & Swim', tag:'water', dist:'1 mile', dur:'2 hours', diff:'Easy', maps:'Colter Bay Village Grand Teton National Park', desc:'Family-friendly pebble beach on Jackson Lake. Stunning Teton views from the water.', tip:'Kayak and canoe rentals at the marina. Best in afternoon.' },
+    { id:'d7', name:'Signal Mountain Summit Drive', tag:'view', dist:'5 miles', dur:'45 min', diff:'Easy', maps:'Signal Mountain Summit Road Grand Teton National Park', desc:'Short paved drive to panoramic views of all the major Teton peaks and Jackson Hole valley.', tip:'Open to regular vehicles only. Morning or late afternoon light is best.' },
+    { id:'d8', name:'Leigh Lake Out-and-Back', tag:'hike', dist:'4 miles rt', dur:'2 hours', diff:'Easy', maps:'String Lake Trailhead Grand Teton National Park', desc:'Flat gorgeous trail to Leigh Lake with a sandy beach below Mount Moran. Swimming allowed.', tip:'Park at String Lake trailhead. Great family lunch spot at the beach.' },
+    { id:'d9', name:'Jackson Town Square & Million Dollar Cowboy Bar', tag:'view', dist:'—', dur:'1 hour', diff:'Easy', maps:'Jackson Town Square Jackson Wyoming', desc:'The famous elk antler arches over Jackson town square. The Million Dollar Cowboy Bar has saddle bar stools.', tip:'Cheap eats: Bin22 or Merry Piglets for Mexican.' },
+    { id:'d10', name:"Moo's Ice Cream in Jackson", tag:'food', dist:'—', dur:'30 min', diff:'Easy', maps:"Moo's Ice Cream Jackson Wyoming", desc:'Legendary local ice cream shop. Homemade flavors, huge scoops.', tip:'Must try: huckleberry. Order doubles.' },
+  ],
+  emigrant: [
+    { id:'e1', name:'Old Faithful + Upper Geyser Basin Walk', tag:'must', dist:'3 miles', dur:'2.5 hours', diff:'Easy', maps:'Old Faithful Visitor Education Center Yellowstone', desc:'Old Faithful erupts every 60-110 minutes. Walk the full Upper Geyser Basin boardwalk after.', tip:'Check predicted eruption time at Visitor Center. Arrive 30 min before.' },
+    { id:'e2', name:'Grand Prismatic Spring Overlook Trail', tag:'must', dist:'1.6 miles', dur:'1.5 hours', diff:'Easy', maps:'Fairy Falls Trailhead Grand Prismatic Overlook Yellowstone', desc:'Short trail to the hilltop overlook of Grand Prismatic. The boardwalk view does not capture the scale. The overlook does.', tip:'Best color midday. Combine with Fairy Falls hike from the same trailhead.' },
+    { id:'e3', name:'Lamar Valley Wildlife Safari at Dawn', tag:'must', dist:'Roadside drive', dur:'3 hours', diff:'Easy', maps:'Lamar Valley Yellowstone National Park Wyoming', desc:'Drive slowly at sunrise and you will see bison herds, elk, often bears, and occasionally wolves.', tip:'Leave by 5:30am. Wolf sightings cluster near Slough Creek junction.' },
+    { id:'e4', name:'Grand Canyon of Yellowstone + Uncle Tom Trail', tag:'must', dist:'2.5 miles total', dur:'2.5 hours', diff:'Moderate', maps:"Uncle Tom's Trail Yellowstone National Park", desc:'Upper and Lower Falls drop into a yellow-walled canyon. Uncle Tom\'s Trail descends 328 steps to the spray platform.', tip:'Steep and wet — wear grippy shoes. Go before 9am to avoid crowds.' },
+    { id:'e5', name:'Swim in the Firehole River', tag:'water', dist:'Roadside', dur:'1-2 hours', diff:'Easy', maps:'Firehole Canyon Drive Swimming Area Yellowstone', desc:'Thermal waters warm the Firehole River to 75-85F. One of few places swimming is allowed in Yellowstone.', tip:'Open July-August. Gets busy by noon — go in the morning.' },
+    { id:'e6', name:'Norris Geyser Basin', tag:'hike', dist:'2 miles', dur:'1.5 hours', diff:'Easy', maps:'Norris Geyser Basin Yellowstone National Park', desc:'The hottest thermal basin in the park. Steamboat Geyser (world\'s tallest active) is here.', tip:'Stay strictly on boardwalks. Porcelain Basin loop is the most spectacular.' },
+    { id:'e7', name:'Mammoth Hot Springs Terraces', tag:'must', dist:'2 miles', dur:'1.5 hours', diff:'Easy', maps:'Mammoth Hot Springs Terraces Yellowstone National Park', desc:'Travertine terraces built by mineral-rich hot springs. Elk often graze right on the boardwalks.', tip:'Drive to Upper Terrace Loop for the best overview.' },
+    { id:'e8', name:'Hayden Valley Bison & Bear Watch', tag:'view', dist:'Roadside', dur:'1.5 hours', diff:'Easy', maps:'Hayden Valley Yellowstone National Park Wyoming', desc:'Massive bison herds, coyotes, bears, and white pelicans on the Yellowstone River.', tip:'Best at dawn and dusk. Stop at every pullout.' },
+    { id:'e9', name:'Yellowstone Lake Picnic at Lake Butte Overlook', tag:'view', dist:'Short walk', dur:'1 hour', diff:'Easy', maps:'Lake Butte Overlook Yellowstone National Park', desc:'Panoramic view of Yellowstone Lake with the Absaroka Range behind it.', tip:'Small pullout just off East Entrance Road. Usually quiet.' },
+    { id:'e10', name:'Boiling River Hot Spring Soak', tag:'water', dist:'0.5 miles rt', dur:'1.5 hours', diff:'Easy', maps:'Boiling River Yellowstone National Park Gardiner Montana', desc:'Hot thermal channel meets the Gardner River creating a natural warm soak. Legal and free.', tip:'Near Mammoth at the 45th Parallel pullout. Check NPS for current open status.' },
+  ],
+  kalispell: [
+    { id:'k1', name:'Going-to-the-Sun Road Full Drive', tag:'must', dist:'50 miles', dur:'3-4 hours', diff:'Easy', maps:'Going to the Sun Road Glacier National Park Montana', desc:'America\'s most scenic mountain road. Drive from West Glacier to St. Mary over Logan Pass at 6,646ft.', tip:'Book a vehicle permit at recreation.gov. Get there before 6am or after 3pm.' },
+    { id:'k2', name:'Highline Trail from Logan Pass', tag:'hike', dist:'11.8 miles one-way', dur:'5-6 hours', diff:'Hard', maps:'Logan Pass Visitor Center Glacier National Park', desc:'Glacier\'s most famous hike along an exposed cliff ledge. Mountain goats and bighorn sheep often right on the trail.', tip:'Take the free park shuttle back from The Loop. First section has a fixed chain assist.' },
+    { id:'k3', name:'Avalanche Lake Trail', tag:'hike', dist:'5.9 miles rt', dur:'2.5-3 hours', diff:'Easy', maps:'Avalanche Creek Trailhead Glacier National Park Montana', desc:'Ancient cedar forest leads to a stunning glacial cirque lake fed by waterfalls. Best family hike in Glacier.', tip:'Arrives early — fills by 9am. Kids will want to wade in the icy water.' },
+    { id:'k4', name:'Hidden Lake Overlook from Logan Pass', tag:'must', dist:'2.7 miles rt', dur:'2 hours', diff:'Moderate', maps:'Hidden Lake Overlook Trail Logan Pass Glacier National Park', desc:'Short hike through alpine meadows. Mountain goats often within feet of the trail.', tip:'Logan Pass parking fills by 7am. Arrive early or use the park shuttle.' },
+    { id:'k5', name:'Grinnell Glacier Hike', tag:'must', dist:'10.6 miles rt', dur:'5-6 hours', diff:'Hard', maps:'Many Glacier Hotel Glacier National Park Montana', desc:'Through wildflower meadows and glacial lakes to one of the park\'s accessible glaciers.', tip:'Cut 4 miles by taking the boat rides across Swiftcurrent and Josephine Lakes.' },
+    { id:'k6', name:'Many Glacier Boat Ride + Hike', tag:'water', dist:'Variable', dur:'Half day', diff:'Moderate', maps:'Many Glacier Boat Dock Glacier National Park Montana', desc:'Historic wooden boats across two lakes, then hike to Grinnell Glacier.', tip:'Book Glacier Park Boat Co. well in advance. Season starts July 1.' },
+    { id:'k7', name:'Iceberg Lake Hike', tag:'hike', dist:'9.7 miles rt', dur:'4-5 hours', diff:'Moderate', maps:'Iceberg Lake Trail Swiftcurrent Motor Inn Glacier National Park', desc:'A hidden lake surrounded by cliff walls that keep it in shadow all summer — icebergs float in July.', tip:'Trailhead at Swiftcurrent Motor Inn. Make noise — bears frequent this trail.' },
+    { id:'k8', name:'Lake McDonald Morning Walk', tag:'view', dist:'1 mile', dur:'1 hour', diff:'Easy', maps:'Apgar Village Lake McDonald Glacier National Park', desc:'Crystal-clear water revealing colorful painted rocks on the bottom. Perfect morning reflections.', tip:'Apgar Village at the south end. Great for skipping stones.' },
+    { id:'k9', name:"Polebridge Mercantile Huckleberry Pastry", tag:'food', dist:'60 min drive', dur:'1 hour', diff:'Easy', maps:'Polebridge Mercantile Polebridge Montana', desc:'Remote off-grid bakery. Famous huckleberry bear claws baked fresh daily. A Glacier institution.', tip:'Cash only. Opens 8am, sells out by 10am.' },
+    { id:'k10', name:'St. Mary Lake & Wild Goose Island Overlook', tag:'view', dist:'Roadside', dur:'30 min', diff:'Easy', maps:'Wild Goose Island Overlook St Mary Lake Glacier National Park', desc:'Iconic east side of Glacier — turquoise lake with a tiny tree-topped island.', tip:'Best light in the morning. St. Mary Visitor Center has great ranger talks.' },
+  ],
+  golden: [
+    { id:'g1', name:'Emerald Lake Canoe + Loop', tag:'must', dist:'3.2 miles', dur:'3 hours', diff:'Easy', maps:'Emerald Lake Yoho National Park British Columbia', desc:'Glacier-fed lake of stunning turquoise-green. Rent a canoe for the most beautiful hour on water this trip.', tip:'Parking fills by 7am. Canoe rentals $25/hour at the boathouse.' },
+    { id:'g2', name:'Takakkaw Falls', tag:'must', dist:'0.5 miles', dur:'45 min', diff:'Easy', maps:'Takakkaw Falls Yoho National Park British Columbia', desc:'At 373 meters, one of the tallest waterfalls in Canada. A wall of glacial meltwater thundering into a valley.', tip:'Bring rain shells — the spray zone near the base is drenching.' },
+    { id:'g3', name:'Natural Bridge', tag:'view', dist:'Short walk', dur:'30 min', diff:'Easy', maps:'Natural Bridge Yoho National Park Field British Columbia', desc:'The Kicking Horse River carved a natural limestone arch over millennia.', tip:'Right off the road. Best flow in July from snowmelt.' },
+    { id:'g4', name:'Twin Falls Hike via Yoho Valley', tag:'hike', dist:'8.5 miles rt', dur:'4-5 hours', diff:'Moderate', maps:'Takakkaw Falls Parking Lot Yoho National Park', desc:'Hike through the stunning Yoho Valley to two side-by-side waterfalls dropping 180 meters.', tip:'Trailhead at Takakkaw Falls parking lot. Twin Falls Chalet at the top serves lunch.' },
+    { id:'g5', name:'Spiral Tunnels Viewpoint', tag:'view', dist:'Roadside', dur:'30 min', diff:'Easy', maps:'Spiral Tunnels Viewpoint Field British Columbia', desc:'Watch a freight train disappear into the mountain and emerge going the opposite direction. Kids are mesmerized.', tip:'Trains come every 1-2 hours. Upper tunnel viewpoint is more dramatic.' },
+    { id:'g6', name:'Wapta Falls Hike', tag:'hike', dist:'4.8 miles rt', dur:'2 hours', diff:'Easy', maps:'Wapta Falls Trailhead Yoho National Park', desc:'The widest waterfall in Yoho — the Kicking Horse River drops 30 meters across a 150-meter-wide curtain.', tip:'Flat easy walk through forest. Great picnic spot at the base.' },
+  ],
+  canmore: [
+    { id:'c1', name:'Lake Louise at Dawn', tag:'must', dist:'3.5 miles rt', dur:'3-4 hours', diff:'Moderate', maps:'Lake Louise Banff National Park Alberta', desc:'The iconic jade-green lake below Victoria Glacier. Arrive before 5:30am for the mirror reflection.', tip:'Book Parks Canada shuttle in advance. No private vehicles during peak hours.' },
+    { id:'c2', name:'Moraine Lake at Sunrise', tag:'must', dist:'Shore walk', dur:'2 hours', diff:'Easy', maps:'Moraine Lake Banff National Park Alberta', desc:'Valley of the Ten Peaks backdrop. The famous rock pile viewpoint gives the $20 bill image.', tip:'Book Parks Canada shuttle well in advance. Rock pile scramble is 10 minutes.' },
+    { id:'c3', name:'Johnston Canyon Hike', tag:'hike', dist:'5.4 miles rt to Inkpots', dur:'3-4 hours', diff:'Easy', maps:'Johnston Canyon Lower Falls Banff National Park', desc:'Catwalk paths bolted to canyon walls lead to two waterfalls. Continue to the Inkpots — mysterious colored springs.', tip:'Go before 9am. Watch for American Dippers swimming underwater in the creek.' },
+    { id:'c4', name:'Banff Gondola + Sulphur Mountain Walk', tag:'must', dist:'4 miles', dur:'3 hours', diff:'Easy', maps:'Banff Gondola Banff Alberta', desc:'8-minute gondola to 7,486ft with 360 degree views of six mountain ranges. Bighorn sheep near the boardwalk.', tip:'Book online — cheaper than gate. Go afternoon when morning clouds burn off.' },
+    { id:'c5', name:'Peyto Lake Viewpoint', tag:'must', dist:'1.4 miles rt', dur:'1 hour', diff:'Easy', maps:'Peyto Lake Viewpoint Icefields Parkway Alberta', desc:'Electric blue wolf-head shaped lake from the top deck viewpoint. Most photographed image in Canada.', tip:'Go early — crowded by 10am. New upper platform is spectacular.' },
+    { id:'c6', name:'Bow Lake & Num-Ti-Jah Lodge', tag:'view', dist:'Short walk', dur:'1 hour', diff:'Easy', maps:'Bow Lake Num-Ti-Jah Lodge Icefields Parkway Alberta', desc:'Historic red-roofed lodge at the edge of Bow Lake with Bow Glacier directly behind it.', tip:'Walk to the far shore for the classic glacier photograph.' },
+    { id:'c7', name:'Lake Minnewanka Boat Cruise', tag:'water', dist:'—', dur:'2.5 hours', diff:'Easy', maps:'Lake Minnewanka Banff National Park Alberta', desc:'The largest lake in Banff. Boat tours run 2.5 hours. An entire submerged town sits below the surface.', tip:'Book Banff Lake Cruise tickets in advance. Kayak rentals at the dock.' },
+    { id:'c8', name:'Vermilion Lakes Wildlife Drive at Dusk', tag:'must', dist:'Roadside', dur:'1 hour', diff:'Easy', maps:'Vermilion Lakes Banff Alberta', desc:'Three lakes with Rundle Mountain reflections. Elk, beavers, herons at dusk.', tip:'Drive slowly. Elk are common roadside. Beaver lodge on the second lake is active.' },
+    { id:'c9', name:'Noodle Box Banff', tag:'food', dist:'—', dur:'30 min', diff:'Easy', maps:'Noodle Box Banff Alberta', desc:'Legendary cheap-eat noodle restaurant in Banff townsite. Big portions, reasonable prices.', tip:'Walk in. Thai Peanut bowl is the classic order.' },
+    { id:'c10', name:'Icefields Parkway South Section Drive', tag:'must', dist:'90 miles', dur:'3-4 hours with stops', diff:'Easy', maps:'Icefields Parkway Banff to Columbia Icefield Alberta', desc:'The southern section from Banff to Columbia Icefield. Bow Lake, Peyto Lake, Mistaya Canyon.', tip:'Stop at every viewpoint. Mistaya Canyon is a narrow slot canyon most people drive past.' },
+  ],
+  hinton: [
+    { id:'h1', name:'Icefields Parkway North Section Drive', tag:'must', dist:'144 miles total', dur:'Full day with stops', diff:'Easy', maps:'Columbia Icefield Discovery Centre Jasper National Park', desc:'From Columbia Icefield to Jasper. The wildest section of the legendary drive.', tip:'Stop at Athabasca Falls, Sunwapta Falls, and Athabasca Glacier.' },
+    { id:'h2', name:'Athabasca Glacier Walk', tag:'must', dist:'2 miles', dur:'2 hours', diff:'Easy', maps:'Athabasca Glacier Columbia Icefield Jasper National Park', desc:'Walk onto the Athabasca Glacier. Feel the ice, hear it creak, drink meltwater.', tip:'Do not wander off marked areas. Ice Explorer bus drives onto the surface.' },
+    { id:'h3', name:'Maligne Lake Cruise to Spirit Island', tag:'must', dist:'—', dur:'3 hours', diff:'Easy', maps:'Maligne Lake Boat Tours Jasper National Park Alberta', desc:'90-minute scenic cruise to Spirit Island. Accessible ONLY by this boat.', tip:'Book well in advance — sells out weeks ahead. Morning cruises have calmest water.' },
+    { id:'h4', name:'Maligne Canyon Loop', tag:'hike', dist:'4.3 miles rt', dur:'2.5 hours', diff:'Moderate', maps:'Maligne Canyon Jasper National Park Alberta', desc:'Six bridges cross one of the deepest canyons in the Rockies. Waterfalls and underground river.', tip:'Start at First Bridge. Gets busy — start before 8am.' },
+    { id:'h5', name:'Jasper Dark Sky Stargazing', tag:'must', dist:'10 min drive', dur:'Evening', diff:'Easy', maps:'Jasper Planetarium Jasper Alberta', desc:'Jasper is a UNESCO Dark Sky Preserve. On a clear night you can see 5,000+ stars.', tip:'Drive 10 min south of town. Jasper Planetarium offers guided tours.' },
+    { id:'h6', name:'Miette Hot Springs Soak', tag:'water', dist:'17 miles from Hinton', dur:'2 hours', diff:'Easy', maps:'Miette Hot Springs Jasper National Park Alberta', desc:'Hottest natural hot springs in the Canadian Rockies — two pools at 103F and one cold plunge.', tip:'Opens 10:30am. Go on a weekday morning. Drive passes excellent wildlife habitat.' },
+    { id:'h7', name:'Angel Glacier at Mount Edith Cavell', tag:'must', dist:'1.5 miles rt', dur:'1.5 hours', diff:'Easy', maps:'Mount Edith Cavell Jasper National Park Alberta', desc:'Angel Glacier on the north face of Mt Edith Cavell. Icebergs calve into the lake below in July.', tip:'Morning light best. Watch for icebergs calving off the glacier.' },
+    { id:'h8', name:'Valley of Five Lakes Hike', tag:'hike', dist:'2.9 miles rt', dur:'1.5 hours', diff:'Easy', maps:'Valley of Five Lakes Trailhead Jasper National Park', desc:'Five small lakes through pine forest, each a different shade of blue and green.', tip:'Trailhead on Hwy 93A south of Jasper. Color differences between the lakes are striking.' },
+    { id:'h9', name:'Athabasca Falls', tag:'must', dist:'0.5 miles', dur:'45 min', diff:'Easy', maps:'Athabasca Falls Jasper National Park Alberta', desc:'Most powerful waterfall in the Rockies. The full river channels through a narrow gorge.', tip:'Right off Hwy 93, 30km south of Jasper. Watch for mountain goats on canyon walls.' },
+  ],
+  nordegg: [
+    { id:'n1', name:'Abraham Lake Shoreline', tag:'view', dist:'Roadside', dur:'1 hour', diff:'Easy', maps:'Abraham Lake Alberta Highway 11', desc:'Stunning blue reservoir backed by the Rockies. Summer blue color rivals any mountain lake in Canada.', tip:'Several pullouts for photography along Hwy 11. Winds can be intense.' },
+    { id:'n2', name:'Nordegg Heritage Site Tour', tag:'view', dist:'Short walk', dur:'1.5 hours', diff:'Easy', maps:'Nordegg Heritage Site Nordegg Alberta', desc:'A perfectly preserved 1910s coal mining ghost town. Guided tours through the mine and townsite.', tip:'Tours run daily in summer. Buy tickets at the Heritage Centre.' },
+    { id:'n3', name:'Siffleur Falls Hike', tag:'hike', dist:'7.4 miles', dur:'3 hours', diff:'Moderate', maps:'Siffleur Falls Trailhead Nordegg Alberta', desc:'Wilderness hike through pine forest to three tiers of waterfalls on the Siffleur River.', tip:'Bring bear spray — genuine backcountry. Second and third falls are most dramatic.' },
+    { id:'n4', name:'Dark Sky Stargazing', tag:'must', dist:'—', dur:'Evening', diff:'Easy', maps:'Nordegg Alberta dark sky', desc:'Nordegg sits in one of Alberta\'s darkest sky zones. Spectacular on clear nights.', tip:'Drive west on Hwy 11 for total darkness. Set up a blanket and spend 2 hours looking up.' },
+  ],
+};
+
+const SCAVENGER_HUNT = [
+  { cat:'🦌 Megafauna', id:'cat1', items:[
+    { id:'s1', name:'Bison', hint:'Large shaggy bovine with a massive shoulder hump. Yellowstone has 5,000 — look on the road (literally).', diff:'easy', parks:['Yellowstone','Grand Teton'], funFact:'Bison can run 35 mph and jump over 6 feet high. A full-grown bull weighs up to 2,000 lbs. They nearly went extinct — by the 1880s fewer than 1,000 remained. Now 5,000 roam Yellowstone alone.' },
+    { id:'s2', name:'Moose', hint:'Biggest deer in the world — absurdly long legs, droopy overhanging nose. Look near marshes and willow flats at dawn and dusk.', diff:'medium', parks:['Grand Teton','Jasper','Glacier'], funFact:'A bull moose grows a new set of antlers every single year, adding up to an inch per day. They are such strong swimmers they can dive 20 feet underwater to eat plants off the lake bottom.' },
+    { id:'s3', name:'Elk (Bull with Antlers)', hint:'Big deer with a pale yellow rump patch and large velvet antlers all summer. Very common near roads in the Canadian Rockies.', diff:'easy', parks:['All'], funFact:'Bull elk antlers grow the fastest of any mammal tissue — up to an inch per day. In fall they bugle so loudly you can hear them from a mile away. A big bull can weigh 700 lbs.' },
+    { id:'s4', name:'Grizzly Bear', hint:'Look for the distinctive shoulder hump and dished (concave) face profile — that is how you tell it from a black bear. Roadside in Yellowstone and Canadian parks.', diff:'hard', parks:['Yellowstone','Jasper','Banff'], funFact:'A grizzly can smell food from 20 miles away — their nose is 7 times better than a bloodhound. Despite their size, they eat mostly berries, roots, and insects.' },
+    { id:'s5', name:'Black Bear', hint:'No shoulder hump and a more doglike rounded face. More common than grizzly. Watch forested areas and roadsides.', diff:'medium', parks:['All'], funFact:'Black bears are not always black — they come in cinnamon, blonde, and even white. They can open a car door by pulling on the handle, which is why food must never be left in vehicles in bear country.' },
+    { id:'s6', name:'Pronghorn', hint:'Tan and white with short curved horns. Very fast, open sagebrush flats near Grand Teton entrance.', diff:'easy', parks:['Grand Teton'], funFact:'Pronghorn are the second-fastest land animal on Earth at 55 mph — faster than a cheetah can sustain. They evolved this speed to outrun the American cheetah, which went extinct 10,000 years ago.' },
+  ]},
+  { cat:'🐐 Mountain Animals', id:'cat2', items:[
+    { id:'s7', name:'Mountain Goat', hint:'Fluffy white coat on impossibly steep cliff faces. Look near Logan Pass Visitor Center and the Highline Trail in Glacier.', diff:'medium', parks:['Glacier','Jasper'], funFact:'Mountain goat hooves have a hard outer rim for gripping edges and a soft inner pad like a suction cup. They can balance on a ledge only 2 inches wide and leap 12 feet across rocky gaps.' },
+    { id:'s8', name:'Bighorn Sheep', hint:'Brown sheep with massive curled horns on the rams. Frequently found right beside roads in the Canadian Rockies — they love the road salt.', diff:'easy', parks:['Banff','Jasper'], funFact:'Ram bighorn sheep charge each other head-on at 20 mph during mating season. The crack can be heard a mile away. Their skull has a double-layered bone structure that absorbs the impact like a built-in helmet.' },
+    { id:'s9', name:'Hoary Marmot', hint:'Large, chubby silver-grey ground squirrel in alpine boulder fields. Gives a loud whistle alarm when it sees you.', diff:'medium', parks:['Glacier','Banff','Jasper'], funFact:'Hoary marmots hibernate for up to 8 months — more time asleep than any other North American mammal. Their heartbeat drops from 200 bpm to just 3-4 bpm during hibernation. Hikers call them whistle pigs.' },
+    { id:'s10', name:'Pika', hint:'Tiny round-eared relative of rabbits living in boulder fields above treeline. Makes a high-pitched squeak. Very small and easy to miss.', diff:'hard', parks:['Grand Teton','Glacier','Banff'], funFact:'Pikas do not hibernate. They spend all summer cutting and drying haystacks of grass to eat under the snow all winter. They are one of the first animals threatened by climate change because they overheat above 75F.' },
+    { id:'s11', name:'Columbian Ground Squirrel', hint:'Tan striped squirrel that stands bolt upright and barks. They practically pose for photos near Logan Pass.', diff:'easy', parks:['Glacier','Banff','Jasper'], funFact:'Columbian ground squirrels hibernate 7-8 months and lose 40% of their body weight. They have a complex alarm call system with different sounds for aerial vs. ground predators.' },
+  ]},
+  { cat:'🦅 Birds', id:'cat3', items:[
+    { id:'s12', name:'Bald Eagle', hint:'Unmistakable white head and tail on adults. Look for them perched in dead trees along rivers and lake shores.', diff:'medium', parks:['Grand Teton','Glacier'], funFact:'A bald eagle nest can weigh up to 2 tons after years of additions — the largest bird nest of any species. They can spot a fish from 2 miles away and dive at 100 mph to catch it.' },
+    { id:'s13', name:'Osprey', hint:'White and brown fishhawk — hovers above water then plunge-dives feet-first. Watch over rivers and lakes.', diff:'medium', parks:['Grand Teton','Glacier'], funFact:'Ospreys catch fish on 70% of their dives — the best success rate of any hunting bird. They have a reversible outer toe that lets them carry fish headfirst to reduce wind drag in flight.' },
+    { id:'s14', name:'Trumpeter Swan', hint:'Enormous all-white swan on oxbow ponds and calm rivers. Largest flying bird in North America.', diff:'medium', parks:['Grand Teton','Yellowstone'], funFact:'Trumpeter swans were hunted nearly to extinction — by 1935 fewer than 70 survived. Today 46,000 exist thanks to conservation. Their wingspan reaches 8 feet wide.' },
+    { id:'s15', name:"Clark's Nutcracker", hint:'Grey bird with bold black and white wings. Very bold and loud. Will absolutely try to steal your crackers at any mountain trailhead.', diff:'easy', parks:['All'], funFact:"A single Clark's Nutcracker hides up to 98,000 seeds per year in thousands of locations and remembers most of them 9 months later. Without them, whitebark pine trees could not spread through the mountains." },
+    { id:'s16', name:'Great Blue Heron', hint:'Stands 4 feet tall but weighs only 5 lbs. Stands completely motionless in shallow water for 20+ minutes waiting to spear a fish.', diff:'easy', parks:['All'], funFact:'Great blue herons can strike at fish in under 15 milliseconds — faster than you can blink. They swallow fish whole and sometimes choke on prey that is too large to go down easily.' },
+  ]},
+  { cat:'🌊 Water & Ice', id:'cat4', items:[
+    { id:'s17', name:'A Geyser Erupting', hint:'Old Faithful in Yellowstone erupts every 60-110 minutes. Check the predicted eruption time at the Visitor Center and arrive 30 minutes early.', diff:'easy', parks:['Yellowstone'], funFact:'Old Faithful shoots 3,700 to 8,400 gallons of boiling water up to 185 feet in the air. Underground the plumbing reaches over a mile deep. The name was given in 1870 because it is reliably predictable.' },
+    { id:'s18', name:'Grand Prismatic Rainbow Colors', hint:'A massive hot spring with vivid rainbow-colored rings visible from the overlook trail. The center is pure blue.', diff:'easy', parks:['Yellowstone'], funFact:'The colors are caused by heat-loving bacteria living at different temperatures. The center is crystal clear because it is too hot (189F) for even bacteria to survive. Grand Prismatic is the third largest hot spring on Earth.' },
+    { id:'s19', name:'Walk on a Glacier', hint:'Athabasca Glacier at the Columbia Icefield in Jasper. You walk right onto the ice.', diff:'easy', parks:['Jasper'], funFact:'The Athabasca Glacier is up to 1,000 feet thick and moves about 80 feet per year. Its meltwater eventually flows into three different oceans: Pacific, Atlantic, and Arctic. It has retreated over a mile since 1870.' },
+    { id:'s20', name:'Turquoise Glacial Lake', hint:'Lakes fed by glaciers turn electric blue-green in July. Look for Emerald Lake, Moraine Lake, or Lake Louise.', diff:'easy', parks:['Yoho','Banff'], funFact:'The color comes from glacial flour — rock ground to a fine powder by glaciers and suspended in the water. The tiny particles scatter sunlight, reflecting only blue and green. The color peaks in July at maximum glacial melt.' },
+    { id:'s21', name:'Waterfall Behind a Catwalk', hint:'Johnston Canyon in Banff has walkways bolted to the canyon wall directly above the river — you walk right next to and behind the falls.', diff:'medium', parks:['Banff','Jasper'], funFact:'Johnston Canyon was carved over thousands of years by the river cutting through solid limestone. The slot narrows to just 20 feet wide at the lower falls. The catwalk is bolted directly into the rock face.' },
+    { id:'s22', name:'River Otter', hint:'Sleek dark brown mammal swimming on its back or sliding down muddy banks. Watch along calm rivers and sheltered lake edges.', diff:'hard', parks:['Grand Teton','Glacier'], funFact:'River otters can hold their breath for 8 minutes and dive 60 feet deep. They have up to 1 million hairs per square inch — the densest fur of any mammal. They also slide down muddy banks just for the fun of it.' },
+  ]},
+  { cat:'🌿 Plants & Landscape', id:'cat5', items:[
+    { id:'s23', name:'Wild Huckleberries', hint:'Small purple or red berries on low bushes along mountain trails. Taste one — they are sweet and earthy. Bears love these more than anything.', diff:'easy', parks:['Glacier','Banff'], funFact:'Huckleberries cannot be commercially farmed. They only grow wild and refuse to transplant. Grizzly bears eat up to 200,000 per day in late summer to fatten for hibernation. Entire valleys in Glacier turn red with them in fall.' },
+    { id:'s24', name:'Indian Paintbrush', hint:'Vivid red or orange flame-shaped flower everywhere in alpine meadows in July. Wyoming state flower.', diff:'easy', parks:['All'], funFact:'Indian paintbrush is a semi-parasite — it photosynthesizes its own food but also sends underground root connections to nearby plants and steals nutrients from them. The colorful part is not the flower but colored leaves called bracts.' },
+    { id:'s25', name:'Thermal Bacteria Colors', hint:'The vivid rainbow rings around a Yellowstone hot spring — different colored bacteria living at different temperatures.', diff:'easy', parks:['Yellowstone'], funFact:'An enzyme from Yellowstone bacteria led to one of the biggest scientific breakthroughs ever. It is used in every COVID test, cancer diagnosis, and DNA fingerprinting process performed anywhere in the world today.' },
+    { id:'s26', name:'A Petrified Tree', hint:'Ancient wood turned completely to stone by minerals. Yellowstone has the largest petrified forest on Earth. Look for standing stone tree stumps.', diff:'hard', parks:['Yellowstone'], funFact:'Yellowstone has 27 separate layers of petrified forests stacked on top of each other representing 50 million years of volcanic eruptions and forest regrowth. Some logs are still standing upright exactly where they grew.' },
+    { id:'s27', name:'Alpine Meadow Full of Wildflowers', hint:'July is peak bloom in the high country. The meadow near Hidden Lake Overlook in Glacier has dozens of species blooming at once.', diff:'easy', parks:['Glacier','Banff','Jasper'], funFact:'Alpine wildflowers complete their entire life cycle — sprout, grow, bloom, and seed — in just 6-8 weeks between snowmelt and first frost. A plant the size of your fist might be over 100 years old.' },
+  ]},
+  { cat:'🌌 Sky & Night', id:'cat6', items:[
+    { id:'s28', name:'Milky Way (Naked Eye)', hint:'Clear night in Jasper or Nordegg — look for a faint misty band arching horizon to horizon. Your eyes need 20 minutes to fully adjust.', diff:'medium', parks:['Jasper','Nordegg'], funFact:'What you see as the Milky Way is the edge of our own galaxy viewed from inside it. You are seeing 100-400 billion stars. The light reaching your eyes left those stars between 600 and 100,000 years ago.' },
+    { id:'s29', name:'Northern Lights', hint:'July 2026 solar activity is elevated. Watch after midnight for a shifting green glow on the northern horizon on clear moonless nights.', diff:'hard', parks:['Jasper','Nordegg'], funFact:'The Northern Lights happen when charged particles from the sun hit Earth\'s magnetic field and excite gas molecules. Green comes from oxygen 60 miles up. Red comes from oxygen 200 miles up. Blue and purple come from nitrogen.' },
+    { id:'s30', name:'Shooting Star', hint:'Lie flat on your back for 20 minutes on any dark night. No phone. Just look up. You will see one.', diff:'easy', parks:['All'], funFact:'Most shooting stars are caused by particles no bigger than a grain of sand burning up at 130,000 mph in the atmosphere. Earth collects about 40 tons of space dust every single day.' },
+    { id:'s31', name:'Perfect Mountain Reflection', hint:'Arrive at a lake before 8am before wind creates ripples. Jenny Lake, Lake Louise, and Bow Lake are the best.', diff:'medium', parks:['All'], funFact:'The best reflections happen at dawn because cold nights create a temperature inversion that suppresses wind near the water surface. A photo turned upside down is nearly indistinguishable from the original.' },
+    { id:'s32', name:'Rainbow Over a Waterfall', hint:'Stand at the base of a waterfall in afternoon sun. The mist creates a natural rainbow right in front of you.', diff:'medium', parks:['All'], funFact:'A rainbow is actually a full circle — you can see the complete ring from an airplane. Two people standing side by side never see the exact same rainbow because the angle to the light is different for each person.' },
+  ]},
+];
+
+const BUDGET_CATS = {
+  fuel:        { label:'Fuel',        icon:'⛽', budget:300 },
+  groceries:   { label:'Groceries',   icon:'🛒', budget:2000 },
+  restaurants: { label:'Restaurants', icon:'🍔', budget:350 },
+  activities:  { label:'Activities',  icon:'🎒', budget:600 },
+  misc:        { label:'Misc',        icon:'📦', budget:550 },
+};
+const BUDGET_TOTAL = 3800;
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let S = {
+  expenses: [],
+  activities: {}, // stopId -> { [actId]: bool }
+  customActs: {}, // stopId -> [act objects]
+  hunt: {},       // itemId -> { done: bool, photo: base64|null }
+  journal: [],
+  photos: {},     // journalId -> [base64s]
+  theme: 'light',
+};
+let _jPhotos = [];
+let _polished = null;
+let _currentTab = 'home';
+
+// ══════════════════════════════════════════
+// STORAGE
+// ══════════════════════════════════════════
+async function saveState() {
+  localStorage.setItem('tripS', JSON.stringify(S));
+  if (window.__supabaseReady && roadTripDb) {
+    try {
+      const { error } = await roadTripDb
+        .from('trip_data')
+        .upsert({ id: SYNC_ROW_ID, category: 'full_state', content: S },
+                { onConflict: 'id' });
+      if (error) throw error;
+      setSyncStatus('synced');
+    } catch(e) {
+      console.warn('Supabase save failed:', e.message);
+      setSyncStatus('local only');
     }
   }
 }
-
-async function unlock() {
-  await loadState();
-  document.getElementById('pinScreen').style.display = 'none';
-  document.getElementById('app').classList.add('visible');
+async function loadState() {
+  if (window.__remoteState) { S = { ...S, ...window.__remoteState }; setSyncStatus('synced'); return; }
+  if (window.__supabaseReady && roadTripDb) {
+    try {
+      const { data, error } = await roadTripDb
+        .from('trip_data')
+        .select('content')
+        .eq('id', SYNC_ROW_ID)
+        .single();
+      if (!error && data?.content) {
+        S = { ...S, ...data.content };
+        setSyncStatus('synced');
+        return;
+      }
+    } catch(e) {
+      console.warn('Supabase load failed, using localStorage:', e.message);
+    }
+  }
+  const ls = localStorage.getItem('tripS');
+  if (ls) { S = { ...S, ...JSON.parse(ls) }; setSyncStatus('local only'); }
 }
-
+function mergeRemoteState(r) {
+  S = { ...S, ...r };
+  setSyncStatus('synced');
+  renderTab(_currentTab);
+}
 function setSyncStatus(msg) {
   const el = document.getElementById('syncStatus');
-  if (el) el.querySelector('span').textContent = 'Status: ' + msg;
+  if (!el) return;
+  const color = msg === 'synced' ? '#6a9e7a' : '#c07828';
+  el.innerHTML = `<div class="syncDot" style="background:${color}"></div><span>${msg}</span>`;
 }
+
+// ══════════════════════════════════════════
+// PIN
+// ══════════════════════════════════════════
+const PIN = '2829';
+let _pinBuf = '';
+function pin(v) {
+  if (v==='clr') _pinBuf='';
+  else if (v==='back') _pinBuf=_pinBuf.slice(0,-1);
+  else if (_pinBuf.length<4) _pinBuf+=v;
+  document.querySelectorAll('.pinDot').forEach((d,i)=>d.classList.toggle('on',i<_pinBuf.length));
+  document.getElementById('pinErr').textContent='\u00a0';
+  if (_pinBuf.length===4) setTimeout(()=>{
+    if (_pinBuf===PIN) unlock();
+    else { document.getElementById('pinErr').textContent='Incorrect PIN — try again'; _pinBuf=''; document.querySelectorAll('.pinDot').forEach(d=>d.classList.remove('on')); }
+  },200);
+}
+async function unlock() {
+  await loadState();
+  document.getElementById('pinScreen').style.display='none';
+  const app=document.getElementById('app');
+  app.classList.add('visible');
+  if (S.theme==='dark') { document.body.setAttribute('data-dark',''); document.getElementById('themeBtn').textContent='☀️'; }
+  window.__appReady=true;
+  goTab('home');
+}
+function lockApp() {
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('pinScreen').style.display='';
+  _pinBuf=''; document.querySelectorAll('.pinDot').forEach(d=>d.classList.remove('on'));
+}
+
+// ══════════════════════════════════════════
+// THEME
+// ══════════════════════════════════════════
+function toggleTheme() {
+  const dark=document.body.hasAttribute('data-dark');
+  if(dark){document.body.removeAttribute('data-dark');document.getElementById('themeBtn').textContent='🌙';S.theme='light';}
+  else{document.body.setAttribute('data-dark','');document.getElementById('themeBtn').textContent='☀️';S.theme='dark';}
+  saveState();
+}
+
+// ══════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════
+const TABS=['home','itinerary','budget','activities','hunt','journal','book'];
+function goTab(t) {
+  _currentTab=t;
+  TABS.forEach(x=>{ document.getElementById('t'+cap(x)).classList.add('hidden'); });
+  document.getElementById('t'+cap(t)).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('on',TABS[i]===t));
+  renderTab(t);
+}
+function cap(s){return s.charAt(0).toUpperCase()+s.slice(1);}
+function renderTab(t) {
+  if(t==='home')renderHome();
+  if(t==='itinerary')renderItinerary();
+  if(t==='budget')renderBudget();
+  if(t==='activities')renderActivities();
+  if(t==='hunt')renderHunt();
+  if(t==='journal')renderJournal();
+  if(t==='book')renderBook();
+}
+
+// ══════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════
+const today=()=>new Date().toISOString().split('T')[0];
+const fmtDate=d=>new Date(d+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+const days=(a,b)=>Math.round((new Date(b)-new Date(a))/86400000);
+const $=id=>document.getElementById(id);
+const fmt=n=>'$'+n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');
+function currentStop(){const t=today();return STOPS.find(s=>t>=s.start&&t<s.end)||null;}
+function totalSpent(){return S.expenses.reduce((a,e)=>a+e.amount,0);}
+function catSpent(c){return S.expenses.filter(e=>e.cat===c).reduce((a,e)=>a+e.amount,0);}
+function allActs(stopId){
+  const hidden=(S.hiddenActs&&S.hiddenActs[stopId])||[];
+  const base=(DEFAULT_ACTIVITIES[stopId]||[]).filter(a=>!hidden.includes(a.id));
+  const custom=S.customActs[stopId]||[];
+  return [...base,...custom];
+}
+function hide(id){$(id).classList.add('hidden');}
+function show(id){$(id).classList.remove('hidden');}
+function closeOverlay(e,id){if(e.target===$(id))hide(id);}
+
+// ══════════════════════════════════════════
+// HOME
+// ══════════════════════════════════════════
+function renderHome() {
+  const stop=currentStop();
+  const t=today();
+  const tripStart='2026-06-27',tripEnd='2026-07-27';
+  const dayNum=days(tripStart,t)+1;
+  const dLeft=days(t,tripEnd);
+  const huntDone=Object.values(S.hunt).filter(h=>h.done).length;
+  const huntTotal=SCAVENGER_HUNT.reduce((a,c)=>a+c.items.length,0);
+
+  let bannerHtml='';
+  if(stop){
+    bannerHtml=`<div class="todayBanner">
+      <div class="todayLabel">📍 You are here</div>
+      <div class="todayLoc">${stop.emoji} ${stop.name}</div>
+      <div class="todayPark">${stop.park}</div>
+      <div class="todayDay">Day ${dayNum} of 30 · ${stop.dates}</div>
+    </div>`;
+  } else if(t<tripStart){
+    const dTo=days(t,tripStart);
+    bannerHtml=`<div class="todayBanner"><div class="todayLabel">Countdown</div><div class="todayLoc">${dTo} days to go!</div><div class="todayPark">Pack those bags ✈️</div></div>`;
+  } else {
+    bannerHtml=`<div class="todayBanner"><div class="todayLabel">Trip complete!</div><div class="todayLoc">What a journey 🏔️</div></div>`;
+  }
+
+  const spent=totalSpent();
+  const pct=Math.min(spent/BUDGET_TOTAL*100,100);
+
+  $('tHome').innerHTML=`
+    ${bannerHtml}
+    <div class="card" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;text-align:center">
+      <div><div style="font-family:'Playfair Display',serif;font-size:1.55rem;color:var(--forest)">${t>=tripStart&&t<tripEnd?dayNum:'–'}</div><div class="muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.05em">Today</div></div>
+      <div><div style="font-family:'Playfair Display',serif;font-size:1.55rem;color:var(--forest)">${dLeft>0?dLeft:'–'}</div><div class="muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.05em">Days Left</div></div>
+      <div><div style="font-family:'Playfair Display',serif;font-size:1.55rem;color:var(--amber)">${huntDone}/${huntTotal}</div><div class="muted" style="font-size:.65rem;text-transform:uppercase;letter-spacing:.05em">Hunt Items</div></div>
+    </div>
+    <div class="card">
+      <div class="cardTitle">Budget Snapshot</div>
+      <div style="display:flex;justify-content:space-between;font-weight:700;margin-bottom:.4rem">
+        <span style="color:var(--amber)">${fmt(spent)} spent</span>
+        <span style="color:var(--moss)">${fmt(BUDGET_TOTAL-spent)} left</span>
+      </div>
+      <div class="progressBar"><div class="progressFill" style="width:${pct}%"></div></div>
+      <div class="muted center" style="font-size:.68rem">${pct.toFixed(0)}% of ${fmt(BUDGET_TOTAL)}</div>
+    </div>
+    <div class="card">
+      <div class="cardTitle">Quick Log Expense</div>
+      <input id="qDesc" placeholder="What did you spend on?">
+      <div class="flex gap" style="margin-bottom:.55rem">
+        <input id="qAmt" type="number" placeholder="$0.00" step=".01" style="margin-bottom:0">
+        <select id="qCat" style="margin-bottom:0">
+          <option value="fuel">⛽</option>
+          <option value="groceries">🛒</option>
+          <option value="restaurants">🍔</option>
+          <option value="activities">🎒</option>
+          <option value="misc">📦</option>
+        </select>
+      </div>
+      <input type="hidden" id="qStop" value="${stop?stop.id:STOPS[0].id}">
+      <button class="btn" onclick="quickLog()">Log Expense</button>
+    </div>
+  `;
+}
+function quickLog(){
+  const desc=$('qDesc').value.trim(),amt=parseFloat($('qAmt').value),cat=$('qCat').value,stopId=$('qStop').value;
+  if(!desc||isNaN(amt)||amt<=0)return alert('Add description and amount');
+  S.expenses.push({id:Date.now(),desc,amount:amt,cat,stopId,date:today()});
+  saveState();renderHome();
+  $('qDesc').value='';$('qAmt').value='';
+}
+
+// ══════════════════════════════════════════
+// ITINERARY
+// ══════════════════════════════════════════
+function renderItinerary() {
+  const t=today();
+  $('tItinerary').innerHTML='<div class="sectionLabel">Your 7 Stops</div>'+STOPS.map(s=>{
+    const isNow=t>=s.start&&t<s.end;
+    const past=t>=s.end;
+    const spent=S.expenses.filter(e=>e.stopId===s.id).reduce((a,e)=>a+e.amount,0);
+    return `<div class="stopCard${isNow?' active':''}" onclick="showStopSheet('${s.id}')">
+      <div class="stopRow">
+        <div><div class="stopName">${s.emoji} ${s.name}</div><div class="stopPark">${s.park}</div><div class="stopDates">${s.dates} · ${s.nights} nights${spent>0?' · '+fmt(spent)+' spent':''}</div></div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:.3rem">
+          ${isNow?'<span class="badge">TODAY</span>':''}
+          ${past?'<span style="font-size:.72rem;color:var(--textLight)">✓</span>':''}
+          <span style="color:var(--textLight)">›</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showStopSheet(stopId) {
+  const s=STOPS.find(x=>x.id===stopId);
+  const acts=allActs(stopId);
+  const checked=S.activities[stopId]||{};
+  const done=acts.filter(a=>checked[a.id]).length;
+  const expHtml=S.expenses.filter(e=>e.stopId===stopId).map(e=>`
+    <div class="expItem"><div><div class="expDesc">${BUDGET_CATS[e.cat].icon} ${e.desc}</div><div class="expMeta">${fmtDate(e.date)}</div></div>
+    <div class="flex gap"><span class="expAmt">${fmt(e.amount)}</span><button class="expDel" onclick="delExp(${e.id})">✕</button></div></div>`).join('');
+  const sheet=document.createElement('div');
+  sheet.className='overlay';
+  sheet.id='stopSheet';
+  sheet.innerHTML=`<div class="sheet">
+    <div class="sheetTitle">${s.emoji} ${s.name} <button class="closeBtn" onclick="document.getElementById('stopSheet').remove()">✕ close</button></div>
+    <div style="font-size:.75rem;color:var(--moss);font-weight:600">${s.park} · ${s.dates}</div>
+    <div class="sectionLabel">Activities (${done}/${acts.length})</div>
+    ${acts.map(a=>`<div class="actItem">
+      <div class="actCheck${checked[a.id]?' done':''}" onclick="toggleAct('${stopId}','${a.id}',this)">${checked[a.id]?'✓':''}</div>
+      <div class="actBody" onclick="showDetail(${JSON.stringify(a).replace(/"/g,'&quot;')})">
+        <div class="actName${checked[a.id]?' done':''}">${a.name}</div>
+        <div class="actMeta"><span class="tag ${a.tag}">${a.tag}</span>${a.dist?`<span class="muted" style="font-size:.68rem">${a.dist}</span>`:''}${a.diff?`<span class="muted" style="font-size:.68rem">${a.diff}</span>`:''}</div>
+      </div>
+    </div>`).join('')}
+    <button class="btn btnOutline btnSm mt" onclick="openAddAct('${stopId}')">+ Add Activity</button>
+    ${expHtml?`<div class="sectionLabel">Expenses</div>${expHtml}`:''}
+  </div>`;
+  sheet.addEventListener('click',e=>{if(e.target===sheet)sheet.remove();});
+  document.body.appendChild(sheet);
+}
+
+// ══════════════════════════════════════════
+// ACTIVITY DETAIL
+// ══════════════════════════════════════════
+function showDetail(a) {
+  if(typeof a==='string')a=JSON.parse(a);
+  $('detailBox').innerHTML=`
+    <h2>${a.name}</h2>
+    <div class="actMeta"><span class="tag ${a.tag}">${a.tag}</span></div>
+    ${(a.dist||a.dur||a.diff)?`<div class="detailGrid">
+      ${a.dist?`<div class="detailStat"><div class="detailStatLabel">Distance</div><div class="detailStatVal">${a.dist}</div></div>`:''}
+      ${a.dur?`<div class="detailStat"><div class="detailStatLabel">Duration</div><div class="detailStatVal">${a.dur}</div></div>`:''}
+      ${a.diff?`<div class="detailStat"><div class="detailStatLabel">Difficulty</div><div class="detailStatVal">${a.diff}</div></div>`:''}
+    </div>`:''}
+    ${a.desc?`<div class="detailDesc">${a.desc}</div>`:''}
+    ${a.tip?`<div class="detailTip">💡 ${a.tip}</div>`:''}
+    <div class="btnRow" style="margin-top:1rem">
+      ${a.maps?`<button class="btn btnAmber btnSm" onclick="openMaps(${JSON.stringify(a.maps).replace(/"/g,'&quot;')})">Navigate</button>`:''}
+      <button class="btn btnOutline btnSm" onclick="closeDetail()">Close</button>
+    </div>
+  `;
+  show('detailSheet');
+}
+function closeDetail(e){if(!e||e.target===$('detailSheet'))hide('detailSheet');}
+
+// ══════════════════════════════════════════
+// ACTIVITIES TAB
+// ══════════════════════════════════════════
+function renderActivities() {
+  $('tActivities').innerHTML=`<button class="btn btnAmber" style="margin-bottom:.85rem" onclick="openAddAct()">+ Add Activity to a Stop</button>`+
+  STOPS.map(s=>{
+    const acts=allActs(s.id);
+    const checked=S.activities[s.id]||{};
+    const done=acts.filter(a=>checked[a.id]).length;
+    const isCustom=(a)=>!!(S.customActs[s.id]||[]).find(ca=>ca.id===a.id);
+    const rows=acts.map(a=>{
+      const aJson=JSON.stringify(a).replace(/"/g,'&quot;');
+      const canDel=isCustom(a);
+      return `<div class="swipeWrap" data-stop="${s.id}" data-act="${a.id}" data-custom="${canDel?'1':'0'}">
+        <div class="swipeDeleteBg">&#128465; Delete</div>
+        <div class="swipeRow" id="ar-${a.id}">
+          <div class="actCheck${checked[a.id]?' done':''}" onclick="toggleAct('${s.id}','${a.id}',this)">${checked[a.id]?'&#10003;':''}</div>
+          <div class="actBody" onclick="showDetail(${aJson})">
+            <div class="actName${checked[a.id]?' done':''}">${a.name}</div>
+            <div class="actMeta"><span class="tag ${a.tag}">${a.tag}</span>${a.dist?`<span class="muted" style="font-size:.68rem">${a.dist}</span>`:''}${a.diff?`<span class="muted" style="font-size:.68rem">${a.diff}</span>`:''}</div>
+          </div>
+          ${a.maps?`<button onclick="openMaps(${JSON.stringify(a.maps).replace(/"/g,'&quot;')},event)" style="background:none;border:none;font-size:.8rem;font-weight:700;color:var(--moss);cursor:pointer;padding:.2rem .4rem;flex-shrink:0;letter-spacing:.03em" title="Navigate">↗</button>`:''}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:.75rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
+        <div>
+          <div class="cardTitle" style="margin-bottom:0">${s.emoji} ${s.park}</div>
+          <div class="muted" style="font-size:.68rem;margin-top:1px">${s.name} · ${s.dates}</div>
+        </div>
+        <span class="muted">${done}/${acts.length}</span>
+      </div>
+      <div class="progressBar" style="height:5px;margin:0 0 .65rem"><div class="progressFill" style="width:${acts.length?done/acts.length*100:0}%"></div></div>
+      ${rows}
+      <button class="btn btnOutline btnSm mt" style="font-size:.72rem" onclick="openAddAct('${s.id}')">+ Add</button>
+    </div>`;
+  }).join('');
+  setTimeout(bindSwipeDelete, 0);
+}
+
+function bindSwipeDelete(){
+  document.querySelectorAll('.swipeWrap').forEach(wrap=>{
+    const row=wrap.querySelector('.swipeRow');
+    const bg=wrap.querySelector('.swipeDeleteBg');
+    if(!row||row._sb)return;
+    row._sb=true;
+    const PEEK=80;
+    const THRESH=120;
+    let sx=0,sy=0,cx=0,drag=false,open=false;
+
+    bg.style.pointerEvents='auto';
+    bg.style.cursor='pointer';
+
+    // Tap red bg — always delete, no confirm()
+    bg.addEventListener('click',e=>{
+      e.stopPropagation();
+      animateAndDelete(wrap);
+    });
+
+    // Tap row body when open = snap shut
+    row.addEventListener('click',e=>{
+      if(open){ e.stopPropagation(); snapShut(); }
+    });
+
+    function snapShut(){
+      open=false;
+      row.style.transition='transform .2s ease';
+      row.style.transform='translateX(0)';
+      bg.classList.remove('vis');
+    }
+
+    row.addEventListener('touchstart',e=>{
+      if(open){ snapShut(); return; }
+      sx=e.touches[0].clientX; sy=e.touches[0].clientY;
+      cx=0; drag=true; row.style.transition='none';
+    },{passive:true});
+
+    row.addEventListener('touchmove',e=>{
+      if(!drag)return;
+      const dx=e.touches[0].clientX-sx, dy=e.touches[0].clientY-sy;
+      if(Math.abs(dy)>Math.abs(dx)+10){drag=false;return;}
+      if(dx>0)return;
+      cx=dx;
+      row.style.transform='translateX('+Math.max(dx,-THRESH-20)+'px)';
+      bg.classList.toggle('vis',Math.abs(dx)>30);
+    },{passive:true});
+
+    row.addEventListener('touchend',()=>{
+      if(!drag)return; drag=false;
+      if(Math.abs(cx)>=THRESH){
+        // Full hard swipe — delete immediately
+        animateAndDelete(wrap);
+      } else if(Math.abs(cx)>=PEEK*0.5){
+        // Partial swipe — park open, tap red button to confirm
+        row.style.transition='transform .15s ease';
+        row.style.transform='translateX(-'+PEEK+'px)';
+        bg.classList.add('vis');
+        open=true;
+      } else {
+        snapShut();
+      }
+    });
+  });
+}
+
+function animateAndDelete(wrap){
+  const row=wrap.querySelector('.swipeRow');
+  row.style.transition='transform .2s ease';
+  row.style.transform='translateX(-110%)';
+  setTimeout(()=>{
+    wrap.style.transition='max-height .22s ease, opacity .22s ease';
+    wrap.style.maxHeight=wrap.offsetHeight+'px';
+    wrap.style.overflow='hidden';
+    requestAnimationFrame(()=>{ wrap.style.maxHeight='0'; wrap.style.opacity='0'; });
+    setTimeout(()=>delActSilent(wrap.dataset.stop, wrap.dataset.act), 240);
+  },200);
+}
+
+function delActSilent(stopId,actId){
+  // Custom activity: remove from customActs
+  if((S.customActs[stopId]||[]).find(a=>a.id===actId)){
+    S.customActs[stopId]=S.customActs[stopId].filter(a=>a.id!==actId);
+  } else {
+    // Built-in: track as hidden
+    if(!S.hiddenActs)S.hiddenActs={};
+    if(!S.hiddenActs[stopId])S.hiddenActs[stopId]=[];
+    if(!S.hiddenActs[stopId].includes(actId))S.hiddenActs[stopId].push(actId);
+  }
+  saveState(); renderActivities();
+}
+function toggleAct(stopId,actId,el){
+  if(!S.activities[stopId])S.activities[stopId]={};
+  S.activities[stopId][actId]=!S.activities[stopId][actId];
+  el.classList.toggle('done');
+  el.textContent=S.activities[stopId][actId]?'✓':'';
+  // update sibling actName
+  const name=el.nextElementSibling?.querySelector('.actName');
+  if(name)name.classList.toggle('done',S.activities[stopId][actId]);
+  saveState();
+}
+// tracks which stopId the add modal was opened from
+let _addActFromStop = null;
+
+function openAddAct(stopId){
+  _addActFromStop = stopId || null;
+  // Close any open stop sheet so it doesn't sit on top of the modal
+  const existingSheet = document.getElementById('stopSheet');
+  if(existingSheet) existingSheet.remove();
+  const stops=STOPS.map(s=>`<option value="${s.id}"${s.id===stopId?' selected':''}>${s.name}</option>`).join('');
+  $('actStop').innerHTML=stops;
+  $('actName').value='';$('actDist').value='';$('actDur').value='';$('actDesc').value='';$('actTip').value='';$('actMaps').value='';$('actDiff').value='';$('actTag').value='must';$('actEditId').value='';$('actAiStatus').textContent='';
+  $('actModalTitle').innerHTML='Add Activity <button class="closeBtn" onclick="hide(\'actModal\')">✕ close</button>';
+  show('actModal');
+}
+
+async function aiLookupActivity(){
+  const name=$('actName').value.trim();
+  const stopId=$('actStop').value;
+  const stop=STOPS.find(s=>s.id===stopId);
+  if(!name)return alert('Enter a hike or activity name first');
+  $('actAiStatus').textContent='🔍 Looking up details...';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:600,
+      messages:[{role:'user',content:`You are a national park expert. Give details about this activity for a family of 4 (parents + boys aged 10 and 12) visiting ${stop.name} (${stop.park}).
+
+Activity: "${name}"
+
+Respond ONLY with a JSON object, no markdown, no explanation. Format:
+{
+  "name": "corrected full name",
+  "tag": "hike|must|view|water|food",
+  "dist": "X miles round trip or one-way",
+  "dur": "X-X hours",
+  "diff": "Easy|Moderate|Hard|Very Hard",
+  "desc": "2-3 sentence description of what makes it worth doing",
+  "tip": "1 practical insider tip for families",
+  "maps": "best Google Maps search string to find this exact location"
+}`}]
+    })});
+    const d=await res.json();
+    const text=d.content?.find(c=>c.type==='text')?.text||'';
+    const clean=text.replace(/```json|```/g,'').trim();
+    const info=JSON.parse(clean);
+    $('actName').value=info.name||name;
+    $('actTag').value=info.tag||'hike';
+    $('actDist').value=info.dist||'';
+    $('actDur').value=info.dur||'';
+    $('actDiff').value=info.diff||'';
+    $('actDesc').value=info.desc||'';
+    $('actTip').value=info.tip||'';
+    $('actMaps').value=info.maps||'';
+    $('actAiStatus').textContent='✅ Details filled in — review and save!';
+    $('actAiStatus').style.color='var(--moss)';
+  }catch(e){
+    $('actAiStatus').textContent='Could not fetch details — fill in manually.';
+    $('actAiStatus').style.color='var(--amber)';
+  }
+}
+
+function saveActivity(){
+  const stopId=$('actStop').value;
+  const name=$('actName').value.trim();
+  if(!name)return alert('Enter an activity name');
+  const act={id:'c'+Date.now(),name,tag:$('actTag').value,dist:$('actDist').value,dur:$('actDur').value,diff:$('actDiff').value,desc:$('actDesc').value,tip:$('actTip').value,maps:$('actMaps').value};
+  if(!S.customActs[stopId])S.customActs[stopId]=[];
+  const editId=$('actEditId').value;
+  if(editId){S.customActs[stopId]=S.customActs[stopId].map(a=>a.id===editId?{...act,id:editId}:a);}
+  else{S.customActs[stopId].push(act);}
+  saveState();
+  hide('actModal');
+  renderActivities();
+  // If opened from the itinerary stop sheet, reopen it so user lands back in context
+  if(_addActFromStop && _currentTab==='itinerary'){
+    setTimeout(()=>showStopSheet(_addActFromStop), 100);
+  }
+}
+
+function delAct(stopId,actId){
+  if(!confirm('Remove this activity?'))return;
+  S.customActs[stopId]=(S.customActs[stopId]||[]).filter(a=>a.id!==actId);
+  saveState();renderActivities();
+}
+
+function openMaps(query,e){
+  if(e)e.stopPropagation();
+  const encoded=encodeURIComponent(query);
+  // Try Apple Maps on iOS, Google Maps everywhere else
+  const url='https://www.google.com/maps/dir/?api=1&destination='+encoded;
+  window.open(url,'_blank');
+}
+
+// ══════════════════════════════════════════
+// BUDGET
+// ══════════════════════════════════════════
+function renderBudget(){
+  const spent=totalSpent();
+  const pct=Math.min(spent/BUDGET_TOTAL*100,100);
+  const cats=Object.entries(BUDGET_CATS).map(([k,v])=>{
+    const s=catSpent(k);const cp=Math.min(s/v.budget*100,100);
+    return `<div class="catCard" onclick="openExpModal('${k}')">
+      <div style="font-size:1.3rem">${v.icon}</div>
+      <div class="catName">${v.label}</div>
+      <div class="catSpent">${fmt(s)}</div>
+      <div class="catBudget">of ${fmt(v.budget)}</div>
+      <div class="progressBar" style="height:4px;margin:.35rem 0 0"><div class="progressFill" style="width:${cp}%"></div></div>
+    </div>`;
+  }).join('');
+  const exps=[...S.expenses].reverse().map(e=>{
+    const stop=STOPS.find(s=>s.id===e.stopId);
+    return `<div class="expItem">
+      <div><div class="expDesc">${BUDGET_CATS[e.cat].icon} ${e.desc}</div><div class="expMeta">${stop?stop.name:''} · ${fmtDate(e.date)}</div></div>
+      <div class="flex gap"><span class="expAmt">${fmt(e.amount)}</span><button class="expDel" onclick="delExp(${e.id})">✕</button></div>
+    </div>`;
+  }).join('');
+  $('tBudget').innerHTML=`
+    <div class="card">
+      <div class="budgetBig">
+        <div class="muted">Total Budget</div>
+        <div class="budgetAmt">${fmt(BUDGET_TOTAL)}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.82rem;font-weight:600">
+        <span style="color:var(--amber)">${fmt(spent)} spent</span>
+        <span style="color:var(--moss)">${fmt(BUDGET_TOTAL-spent)} remaining</span>
+      </div>
+      <div class="progressBar"><div class="progressFill" style="width:${pct}%"></div></div>
+      <div class="catGrid">${cats}</div>
+    </div>
+    <div class="sectionLabel">All Expenses</div>
+    <div class="card">
+      ${exps||'<div class="muted center" style="padding:.75rem">No expenses logged yet.</div>'}
+      <button class="btn btnAmber mt" onclick="openExpModal()">+ Add Expense</button>
+    </div>
+  `;
+}
+function openExpModal(cat){
+  $('eStop').innerHTML=STOPS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const cur=currentStop();if(cur)$('eStop').value=cur.id;
+  if(cat)$('eCat').value=cat;
+  $('eDesc').value='';$('eAmt').value='';
+  show('expModal');
+}
+function saveExpense(){
+  const desc=$('eDesc').value.trim(),amt=parseFloat($('eAmt').value);
+  if(!desc||isNaN(amt)||amt<=0)return alert('Fill in description and amount');
+  S.expenses.push({id:Date.now(),desc,amount:amt,cat:$('eCat').value,stopId:$('eStop').value,date:today()});
+  saveState();hide('expModal');renderBudget();
+}
+function delExp(id){S.expenses=S.expenses.filter(e=>e.id!==id);saveState();renderBudget();if(document.getElementById('stopSheet'))document.getElementById('stopSheet').remove();}
+
+// ══════════════════════════════════════════
+// SCAVENGER HUNT
+// ══════════════════════════════════════════
+function renderHunt(){
+  const total=SCAVENGER_HUNT.reduce((a,c)=>a+c.items.length,0);
+  const done=Object.values(S.hunt).filter(h=>h.done).length;
+
+  let html=`<div class="huntStats">
+    <div class="huntStat"><div class="huntStatNum" style="color:var(--amber)">${done}</div><div class="huntStatLabel">Found</div></div>
+    <div class="huntStat"><div class="huntStatNum">${total-done}</div><div class="huntStatLabel">To Find</div></div>
+    <div class="huntStat"><div class="huntStatNum">${Math.round(done/total*100)}%</div><div class="huntStatLabel">Complete</div></div>
+  </div>
+  <div class="progressBar" style="margin-bottom:1rem"><div class="progressFill" style="width:${done/total*100}%"></div></div>
+  <div class="muted" style="font-size:.72rem;margin-bottom:.85rem;text-align:center">Tap any item to learn more · 📷 to add proof photo</div>`;
+
+  SCAVENGER_HUNT.forEach(cat=>{
+    const catDone=cat.items.filter(i=>S.hunt[i.id]?.done).length;
+    html+=`<div class="huntCard">
+      <div class="huntHeader" onclick="this.nextElementSibling.classList.toggle('hidden')">
+        <div class="huntCatTitle">${cat.cat}</div>
+        <span class="huntProgress">${catDone}/${cat.items.length} ${catDone===cat.items.length?'✅':''}</span>
+      </div>
+      <div>
+      ${cat.items.map(item=>{
+        const h=S.hunt[item.id]||{done:false,photo:null};
+        const diffCls=item.diff==='easy'?'easy':item.diff==='hard'?'hard':'medium';
+        const isDone=h.done;
+        const itemJson=JSON.stringify(item).replace(/"/g,'&quot;');
+        return `<div class="huntItemInner" style="${isDone?'opacity:.65':''}">
+          <div class="huntCheck${isDone?' done':''}" onclick="toggleHunt('${item.id}')">${isDone?'&#10003;':''}</div>
+          <div class="huntBody" onclick="showHuntDetail(${itemJson})" style="flex:1;cursor:pointer">
+            <div class="flex gap" style="align-items:center;flex-wrap:wrap;margin-bottom:.15rem">
+              <div class="huntName" style="${isDone?'text-decoration:line-through':''}">${item.name}</div>
+              <span class="huntDiff ${diffCls}">${item.diff}</span>
+              <span style="font-size:.65rem;color:var(--moss);font-weight:600">ⓘ info</span>
+            </div>
+            <div class="huntHint" style="font-size:.75rem">${item.hint}</div>
+            <div class="muted" style="font-size:.6rem;margin-top:2px">📍 ${item.parks.join(', ')}</div>
+          </div>
+          <div class="huntProofArea">
+            ${h.photo
+              ? `<div class="huntProofThumb" onclick="viewHuntPhoto('${item.id}')">
+                   <img src="${h.photo}" alt="proof">
+                   <button class="photoDel" onclick="huntDelPhoto(event,'${item.id}')">&#10005;</button>
+                 </div>`
+              : `<div class="huntProofAdd" onclick="huntPhotoAdd('${item.id}')">📷</div>`
+            }
+            <div class="huntProofLabel">${h.photo?'Proof':'Add'}</div>
+          </div>
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`;
+  });
+  $('tHunt').innerHTML=html;
+}
+
+function showHuntDetail(item){
+  if(typeof item==='string')item=JSON.parse(item);
+  const h=S.hunt[item.id]||{done:false,photo:null};
+  const diffCls=item.diff==='easy'?'easy':item.diff==='hard'?'hard':'medium';
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;backdrop-filter:blur(4px)';
+  overlay.innerHTML=`<div style="background:var(--cream);border-radius:22px 22px 0 0;padding:1.5rem;width:100%;max-width:640px;margin:0 auto;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:.75rem">
+      <div style="font-family:'Playfair Display',serif;font-size:1.2rem;flex:1;padding-right:1rem">${item.name}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:var(--sand);border:none;border-radius:8px;padding:.25rem .65rem;cursor:pointer;font-size:.82rem;color:var(--textLight);flex-shrink:0">&#10005; close</button>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem">
+      <span class="huntDiff ${diffCls}">${item.diff}</span>
+      <span style="font-size:.68rem;background:var(--sand);padding:2px 8px;border-radius:20px;color:var(--textMid)">📍 ${item.parks.join(', ')}</span>
+    </div>
+    <div style="background:linear-gradient(135deg,rgba(61,107,74,.1),rgba(74,127,160,.08));border-radius:12px;padding:1rem;margin-bottom:.85rem">
+      <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--textLight);margin-bottom:.3rem">Where to look</div>
+      <div style="font-size:.875rem;line-height:1.6;color:var(--textMid)">${item.hint}</div>
+    </div>
+    ${item.funFact?`<div style="background:rgba(192,120,40,.1);border-left:3px solid var(--amber);border-radius:0 10px 10px 0;padding:.75rem;margin-bottom:.85rem">
+      <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--amber);margin-bottom:.25rem">&#127381; Fun Fact</div>
+      <div style="font-size:.85rem;line-height:1.6;color:var(--textMid)">${item.funFact}</div>
+    </div>`:''}
+    ${h.photo?`<div style="margin-bottom:.85rem"><div style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--textLight);margin-bottom:.4rem">Your Proof Photo</div><img src="${h.photo}" style="width:100%;border-radius:12px;object-fit:cover;max-height:200px"></div>`:''}
+    <div style="display:flex;gap:.65rem">
+      <button onclick="toggleHunt('${item.id}');this.closest('[style*=fixed]').remove()" style="flex:1;background:${h.done?'var(--sand)':'var(--amber)'};color:${h.done?'var(--textMid)':'white'};border:none;border-radius:12px;padding:.7rem;font-family:'DM Sans',sans-serif;font-size:.875rem;font-weight:600;cursor:pointer">${h.done?'&#10003; Found it':'Mark as Found'}</button>
+      <button onclick="huntPhotoAdd('${item.id}');this.closest('[style*=fixed]').remove()" style="background:var(--forest);color:white;border:none;border-radius:12px;padding:.7rem 1rem;font-family:'DM Sans',sans-serif;font-size:.875rem;cursor:pointer">📷 ${h.photo?'Replace':'Add'} Photo</button>
+    </div>
+  </div>`;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.body.appendChild(overlay);
+}
+
+function toggleHunt(id){
+  if(!S.hunt[id])S.hunt[id]={done:false,photo:null};
+  S.hunt[id].done=!S.hunt[id].done;
+  saveState();
+  renderHunt();
+}
+
+function huntPhotoAdd(id){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='image/*';inp.capture='environment';
+  inp.onchange=e=>{
+    const f=e.target.files[0];if(!f)return;
+    // Resize before storing to keep size manageable
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      const img=new Image();
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const MAX=600;
+        let w=img.width,h=img.height;
+        if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        const data=canvas.toDataURL('image/jpeg',0.8);
+        if(!S.hunt[id])S.hunt[id]={done:true,photo:null};
+        S.hunt[id].photo=data;
+        S.hunt[id].done=true; // auto-mark found when photo added
+        saveState();renderHunt();
+      };
+      img.src=ev.target.result;
+    };
+    reader.readAsDataURL(f);
+  };
+  inp.click();
+}
+
+function viewHuntPhoto(id){
+  const h=S.hunt[id];if(!h?.photo)return;
+  const item=SCAVENGER_HUNT.flatMap(c=>c.items).find(i=>i.id===id);
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;padding:1rem';
+  overlay.innerHTML=`
+    <div style="color:white;font-family:'Playfair Display',serif;font-size:1.1rem">${item?.name||'Photo'}</div>
+    <img src="${h.photo}" style="max-width:100%;max-height:70vh;border-radius:12px;object-fit:contain">
+    <button style="background:rgba(255,255,255,.15);border:none;color:white;padding:.6rem 1.5rem;border-radius:10px;font-size:.9rem;cursor:pointer" onclick="this.parentElement.remove()">Close</button>
+  `;
+  overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});
+  document.body.appendChild(overlay);
+}
+
+function huntDelPhoto(e,id){
+  e.stopPropagation();
+  if(S.hunt[id])S.hunt[id].photo=null;
+  saveState();renderHunt();
+}
+
+// ══════════════════════════════════════════
+// JOURNAL
+// ══════════════════════════════════════════
+function renderJournal(){
+  const entries=[...(S.journal||[])].reverse();
+  const btn='<button class="btn btnAmber" style="margin-bottom:.85rem" onclick="openJournal()">+ New Journal Entry</button>';
+  if(!entries.length){$('tJournal').innerHTML=btn+`<div class="muted center" style="padding:2rem"><div style="font-size:2rem;margin-bottom:.5rem">📖</div>Start capturing your adventure!</div>`;return;}
+  const html=entries.map(e=>{
+    const stop=STOPS.find(s=>s.id===e.stopId);
+    const photos=(S.photos[e.id]||[]).map(p=>`<div class="photoThumb"><img src="${p}" alt=""></div>`).join('');
+    return `<div class="jEntry">
+      <div class="jDate">${fmtDate(e.date)}</div>
+      <div class="jLoc">${stop?stop.emoji+' '+stop.name:''}</div>
+      <div class="jText">${(e.polished||e.raw).replace(/\n\n/g,'<br><br>')}</div>
+      ${(e.kid1||e.kid2)?`<div class="jKids">
+        ${e.kid1?`<div class="kidLabel">Kid 1</div><div class="kidNote">"${e.kid1}"</div>`:''}
+        ${e.kid2?`<div class="kidLabel" style="margin-top:.4rem">Kid 2</div><div class="kidNote">"${e.kid2}"</div>`:''}
+      </div>`:''}
+      ${photos?`<div class="photoGrid">${photos}</div>`:''}
+    </div>`;
+  }).join('');
+  $('tJournal').innerHTML=btn+html;
+}
+function openJournal(){
+  $('jStop').innerHTML=STOPS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const cur=currentStop();if(cur)$('jStop').value=cur.id;
+  $('jText').value='';$('jKid1').value='';$('jKid2').value='';
+  $('jAiArea').innerHTML='';_jPhotos=[];_polished=null;
+  renderJPhotoGrid();show('jModal');
+}
+function renderJPhotoGrid(){
+  let html=_jPhotos.map((p,i)=>`<div class="photoThumb"><img src="${p}" alt=""><button class="photoDel" onclick="rmJPhoto(${i})">✕</button></div>`).join('');
+  if(_jPhotos.length<4)html+=`<div class="photoAdd" onclick="$('jPhotoFile').click()"><span>+</span><span>Photo</span></div>`;
+  $('jPhotoGrid').innerHTML=html;
+}
+function rmJPhoto(i){_jPhotos.splice(i,1);renderJPhotoGrid();}
+function handlePhoto(e){
+  Array.from(e.target.files).slice(0,4-_jPhotos.length).forEach(f=>{
+    const r=new FileReader();r.onload=ev=>{_jPhotos.push(ev.target.result);renderJPhotoGrid();};r.readAsDataURL(f);
+  });e.target.value='';
+}
+async function polishJournal(){
+  const text=$('jText').value.trim();if(!text)return alert('Add some notes first!');
+  const stop=STOPS.find(s=>s.id===$('jStop').value);
+  const kid1=$('jKid1').value,kid2=$('jKid2').value;
+  $('jAiArea').innerHTML='<div class="muted center" style="padding:.75rem">✨ Polishing your memories...</div>';
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      model:'claude-sonnet-4-20250514',max_tokens:1000,
+      messages:[{role:'user',content:`You are helping a family write a beautiful travel journal entry.
+Parent's rough notes: "${text}"
+${kid1?`Kid 1's highlight: "${kid1}"`:''}
+${kid2?`Kid 2's highlight: "${kid2}"`:''}
+Location: ${stop.name} (${stop.park})
+
+Write a warm, vivid, 2-3 paragraph journal entry in first-person plural (we/our — the parents writing together). Keep it personal, specific, heartfelt. Capture emotions, sights, and family moments. 3-4 sentences per paragraph. Avoid clichés like "magical" or "breathtaking". Make it feel like a real family memory. Do not add headers or labels.`}]
+    })});
+    const d=await res.json();
+    _polished=d.content?.find(c=>c.type==='text')?.text||'';
+    $('jAiArea').innerHTML=`<div class="aiResult">${_polished.replace(/\n\n/g,'<br><br>')}</div>`;
+  }catch(e){$('jAiArea').innerHTML='<div class="muted">Could not reach AI — you can save raw notes.</div>';}
+}
+function saveJournal(){
+  const raw=$('jText').value.trim();if(!raw)return alert('Add some notes first!');
+  const id=Date.now();
+  S.journal.push({id,date:today(),stopId:$('jStop').value,raw,polished:_polished||null,kid1:$('jKid1').value,kid2:$('jKid2').value});
+  if(_jPhotos.length)S.photos[id]=[..._jPhotos];
+  _jPhotos=[];_polished=null;
+  saveState();hide('jModal');renderJournal();
+}
+
+// ══════════════════════════════════════════
+// PHOTO BOOK
+// ══════════════════════════════════════════
+function renderBook(){
+  const hasContent=S.journal.length>0||Object.values(S.hunt).some(h=>h.photo);
+
+  if(!hasContent){
+    $('tBook').innerHTML=`
+      <div class="bookEmpty">
+        <div style="font-size:3rem;margin-bottom:.75rem">📖</div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.2rem;margin-bottom:.5rem">Your Book is Empty</div>
+        <div class="muted">Add journal entries and scavenger hunt photos during the trip — they'll all appear here automatically as a printable memory book.</div>
+      </div>`;
+    return;
+  }
+
+  let html=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem" class="noPrint">
+      <div>
+        <div style="font-family:'Playfair Display',serif;font-size:1.15rem">Memory Book</div>
+        <div class="muted" style="font-size:.72rem">Struss Family Road Trip 2026</div>
+      </div>
+      <button class="btn btnAmber btnSm" onclick="printBook()">🖨️ Print / Save PDF</button>
+    </div>
+
+    <!-- COVER -->
+    <div class="bookChapter" style="text-align:center;padding:2rem 1rem;background:linear-gradient(135deg,var(--forest),var(--moss));border-radius:var(--radius);color:white;margin-bottom:1.5rem">
+      <div style="font-size:3rem;margin-bottom:.5rem">🏔️</div>
+      <div style="font-family:'Playfair Display',serif;font-size:1.8rem;line-height:1.2">Struss Family<br>Road Trip</div>
+      <div style="opacity:.8;margin-top:.5rem;font-size:.9rem">June 27 – July 27, 2026</div>
+      <div style="opacity:.65;margin-top:.25rem;font-size:.75rem">Grand Teton · Yellowstone · Glacier · Yoho · Banff · Jasper</div>
+      <div style="margin-top:1.25rem;display:flex;justify-content:center;gap:2rem">
+        <div><div style="font-size:1.4rem;font-weight:700">${S.journal.length}</div><div style="font-size:.65rem;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Days Journaled</div></div>
+        <div><div style="font-size:1.4rem;font-weight:700">${Object.values(S.hunt).filter(h=>h.done).length}</div><div style="font-size:.65rem;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Hunt Items Found</div></div>
+        <div><div style="font-size:1.4rem;font-weight:700">${Object.values(S.photos).flat().length+Object.values(S.hunt).filter(h=>h.photo).length}</div><div style="font-size:.65rem;opacity:.7;text-transform:uppercase;letter-spacing:.05em">Photos</div></div>
+      </div>
+    </div>`;
+
+  // Chapter per stop
+  STOPS.forEach(stop=>{
+    const entries=S.journal.filter(e=>e.stopId===stop.id);
+    const huntItems=SCAVENGER_HUNT.flatMap(c=>c.items).filter(i=>S.hunt[i.id]?.photo);
+    const stopHuntItems=huntItems.filter(i=>i.parks.includes(stop.park.replace(' NP','').replace(' National Park',''))||i.parks.includes('All'));
+
+    if(!entries.length&&!stopHuntItems.length)return;
+
+    html+=`<div class="bookChapter card">
+      <div class="bookChapterTitle">${stop.emoji} ${stop.name} <span style="font-size:.75rem;font-weight:400;color:var(--textLight)">${stop.park} · ${stop.dates}</span></div>`;
+
+    // Journal entries for this stop
+    entries.forEach(e=>{
+      const photos=S.photos[e.id]||[];
+      html+=`<div class="bookEntry">
+        <div class="bookEntryDate">${fmtDate(e.date)}</div>
+        <div class="bookEntryText">${(e.polished||e.raw).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div>
+        ${e.kid1?`<div class="bookKidQuote">Kid 1: "${e.kid1}"</div>`:''}
+        ${e.kid2?`<div class="bookKidQuote">Kid 2: "${e.kid2}"</div>`:''}
+        ${photos.length?`<div class="bookPhotoRow">${photos.map(p=>`<img src="${p}" alt="">`).join('')}</div>`:''}
+      </div>`;
+    });
+
+    // Scavenger hunt photos for this stop
+    const proofPhotos=SCAVENGER_HUNT.flatMap(c=>c.items)
+      .filter(i=>S.hunt[i.id]?.photo)
+      .filter(i=>i.parks.some(p=>p==='All'||stop.park.includes(p)||p.includes(stop.park.split(' ')[0])));
+
+    if(proofPhotos.length){
+      html+=`<div class="bookHuntSection">
+        <div class="sectionLabel" style="margin-top:.75rem">🔍 What we found here</div>
+        <div class="bookHuntGrid">
+          ${proofPhotos.map(i=>`
+            <div class="bookHuntItem">
+              <img src="${S.hunt[i.id].photo}" alt="${i.name}">
+              <div class="bookHuntLabel">${i.name}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
+    html+=`</div>`;
+  });
+
+  // Full scavenger gallery at the end
+  const allProof=SCAVENGER_HUNT.flatMap(c=>c.items).filter(i=>S.hunt[i.id]?.photo);
+  if(allProof.length){
+    html+=`<div class="bookChapter card">
+      <div class="bookChapterTitle">🔍 Complete Scavenger Hunt Gallery</div>
+      <div class="muted" style="margin-bottom:.75rem;font-size:.8rem">Everything the boys found on the trip</div>
+      <div class="bookHuntGrid" style="grid-template-columns:repeat(3,1fr)">
+        ${allProof.map(i=>`
+          <div class="bookHuntItem">
+            <img src="${S.hunt[i.id].photo}" alt="${i.name}">
+            <div class="bookHuntLabel">${i.name}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }
+
+  // Closing page
+  html+=`<div class="bookChapter" style="text-align:center;padding:2rem 1rem;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow)">
+    <div style="font-size:2rem;margin-bottom:.5rem">🏕️</div>
+    <div style="font-family:'Playfair Display',serif;font-size:1.15rem">The End of an Epic Adventure</div>
+    <div class="muted" style="margin-top:.4rem;font-size:.8rem">Struss Family · Summer 2026</div>
+  </div>`;
+
+  $('tBook').innerHTML=html;
+}
+
+function printBook(){
+  // Hide everything except book tab, print, restore
+  const tabs=document.querySelectorAll('[id^="t"]:not(#tBook)');
+  const header=document.querySelector('header');
+  tabs.forEach(t=>t.setAttribute('data-wasHidden',t.classList.contains('hidden')?'1':'0'));
+  tabs.forEach(t=>t.classList.add('hidden'));
+  header.style.display='none';
+  window.print();
+  setTimeout(()=>{
+    tabs.forEach(t=>{if(t.getAttribute('data-wasHidden')==='0')t.classList.remove('hidden');});
+    header.style.display='';
+  },1000);
+}
+window.addEventListener('DOMContentLoaded',()=>{
+  // Pre-fill stop selects
+  const opts=STOPS.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  ['eStop','actStop','jStop'].forEach(id=>{ const el=$(id); if(el)el.innerHTML=opts; });
+});
 </script>
 </body>
 </html>

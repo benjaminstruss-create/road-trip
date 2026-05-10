@@ -6,6 +6,23 @@
 <title>Struss Family Road Trip 2026</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 
+<!-- PIN logic hoisted here so onclick attributes work before the main script loads -->
+<script>
+const PIN = '2829';
+let _pinBuf = '';
+function pin(v) {
+  if (v==='clr') _pinBuf='';
+  else if (v==='back') _pinBuf=_pinBuf.slice(0,-1);
+  else if (_pinBuf.length<4) _pinBuf+=v;
+  document.querySelectorAll('.pinDot').forEach((d,i)=>d.classList.toggle('on',i<_pinBuf.length));
+  document.getElementById('pinErr').textContent='\u00a0';
+  if (_pinBuf.length===4) setTimeout(()=>{
+    if (_pinBuf===PIN) unlock();
+    else { document.getElementById('pinErr').textContent='Incorrect PIN — try again'; _pinBuf=''; document.querySelectorAll('.pinDot').forEach(d=>d.classList.remove('on')); }
+  },200);
+}
+</script>
+
 <!-- Supabase -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -722,21 +739,8 @@ function setSyncStatus(msg) {
 }
 
 // ══════════════════════════════════════════
-// PIN
+// PIN (pin() and PIN const are in the <head> script above)
 // ══════════════════════════════════════════
-const PIN = '2829';
-let _pinBuf = '';
-function pin(v) {
-  if (v==='clr') _pinBuf='';
-  else if (v==='back') _pinBuf=_pinBuf.slice(0,-1);
-  else if (_pinBuf.length<4) _pinBuf+=v;
-  document.querySelectorAll('.pinDot').forEach((d,i)=>d.classList.toggle('on',i<_pinBuf.length));
-  document.getElementById('pinErr').textContent='\u00a0';
-  if (_pinBuf.length===4) setTimeout(()=>{
-    if (_pinBuf===PIN) unlock();
-    else { document.getElementById('pinErr').textContent='Incorrect PIN — try again'; _pinBuf=''; document.querySelectorAll('.pinDot').forEach(d=>d.classList.remove('on')); }
-  },200);
-}
 async function unlock() {
   await loadState();
   document.getElementById('pinScreen').style.display='none';
@@ -1516,10 +1520,11 @@ function generateBookExport(){
   fetch('book-export-generator.html')
     .then(r=>r.text())
     .then(html=>{
-      // Inject state right before </script> of buildBook call
+      // Inject state right before the closing script tag of buildBook call
+      const injectedScript = '// State injected from app\nconst INJECTED_STATE=' + stateJSON + ';\nwindow.addEventListener(\'DOMContentLoaded\',()=>{ try{ const ls=localStorage.getItem(\'tripS\'); if(!ls) localStorage.setItem(\'tripS\',JSON.stringify(INJECTED_STATE)); } catch(e){} buildBook(); });';
       const injected=html.replace(
-        'window.addEventListener(\'DOMContentLoaded\', buildBook);',
-        `// State injected from app\nconst INJECTED_STATE=${stateJSON};\nwindow.addEventListener('DOMContentLoaded',()=>{ try{ const ls=localStorage.getItem('tripS'); if(!ls) localStorage.setItem('tripS',JSON.stringify(INJECTED_STATE)); } catch(e){} buildBook(); });`
+        "window.addEventListener('DOMContentLoaded', buildBook);",
+        injectedScript
       );
       const blob=new Blob([injected],{type:'text/html'});
       const url=URL.createObjectURL(blob);
@@ -1597,7 +1602,7 @@ function renderBook(){
         <div class="bookEntryText">${(e.polished||e.raw).replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>')}</div>
         ${e.kid1?`<div class="bookKidQuote">Kid 1: "${e.kid1}"</div>`:''}
         ${e.kid2?`<div class="bookKidQuote">Kid 2: "${e.kid2}"</div>`:''}
-        ${photos.length?`<div class="bookPhotoRow">${photos.map(p=>`<img src="${p}" alt="">`).join('')}</div>`:''}
+        ${photos.length?'<div class="bookPhotoRow">'+photos.map(p=>'<img src="'+p+'" alt="">').join('')+'</div>':''}
       </div>`;
     });
 
@@ -1610,11 +1615,7 @@ function renderBook(){
       html+=`<div class="bookHuntSection">
         <div class="sectionLabel" style="margin-top:.75rem">🔍 What we found here</div>
         <div class="bookHuntGrid">
-          ${proofPhotos.map(i=>`
-            <div class="bookHuntItem">
-              <img src="${S.hunt[i.id].photo}" alt="${i.name}">
-              <div class="bookHuntLabel">${i.name}</div>
-            </div>`).join('')}
+          ${proofPhotos.map(i=>'<div class="bookHuntItem"><img src="'+S.hunt[i.id].photo+'" alt="'+i.name+'"><div class="bookHuntLabel">'+i.name+'</div></div>').join('')}
         </div>
       </div>`;
     }
@@ -1629,11 +1630,7 @@ function renderBook(){
       <div class="bookChapterTitle">🔍 Complete Scavenger Hunt Gallery</div>
       <div class="muted" style="margin-bottom:.75rem;font-size:.8rem">Everything the boys found on the trip</div>
       <div class="bookHuntGrid" style="grid-template-columns:repeat(3,1fr)">
-        ${allProof.map(i=>`
-          <div class="bookHuntItem">
-            <img src="${S.hunt[i.id].photo}" alt="${i.name}">
-            <div class="bookHuntLabel">${i.name}</div>
-          </div>`).join('')}
+        ${allProof.map(i=>'<div class="bookHuntItem"><img src="'+S.hunt[i.id].photo+'" alt="'+i.name+'"><div class="bookHuntLabel">'+i.name+'</div></div>').join('')}
       </div>
     </div>`;
   }
